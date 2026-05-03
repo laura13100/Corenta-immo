@@ -7,6 +7,8 @@ export default function App() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [authError, setAuthError] = useState('')
+  const [authSuccess, setAuthSuccess] = useState('')
+  const [mode, setMode] = useState('login') // 'login' ou 'signup'
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -24,24 +26,41 @@ export default function App() {
     if (error) setAuthError('Email ou mot de passe incorrect')
   }
 
+  async function signup() {
+    setAuthError('')
+    setAuthSuccess('')
+    const { error } = await supabase.auth.signUp({ email, password })
+    if (error) setAuthError(error.message)
+    else setAuthSuccess('Compte créé ! Vérifiez vos emails pour confirmer.')
+  }
+
   async function logout() {
     await supabase.auth.signOut()
   }
 
-  if (loading) return <div>Chargement...</div>
+  if (loading) return <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh'}}>Chargement...</div>
 
   if (!user) return (
     <div style={{display:'flex',alignItems:'center',justifyContent:'center',height:'100vh',background:'#f7f4ee'}}>
       <div style={{background:'#fff',borderRadius:16,padding:'40px 32px',width:320,boxShadow:'0 4px 24px rgba(0,0,0,.10)'}}>
         <div style={{fontSize:26,fontWeight:900,color:'#2d5b3d',marginBottom:4}}><span style={{fontWeight:300}}>Co</span>renta</div>
-        <div style={{fontSize:13,color:'#6b8c74',marginBottom:28}}>Gestion immobilière</div>
+        <div style={{fontSize:13,color:'#6b8c74',marginBottom:24}}>Gestion immobilière</div>
+        
+        <div style={{display:'flex',gap:8,marginBottom:20}}>
+          <button onClick={()=>setMode('login')} style={{flex:1,padding:'8px',borderRadius:8,border:2px solid ${mode==='login'?'#2d5b3d':'#dde8e0'},background:mode==='login'?'#2d5b3d':'transparent',color:mode==='login'?'#fff':'#6b8c74',fontWeight:700,cursor:'pointer',fontSize:13}}>Connexion</button>
+          <button onClick={()=>setMode('signup')} style={{flex:1,padding:'8px',borderRadius:8,border:2px solid ${mode==='signup'?'#2d5b3d':'#dde8e0'},background:mode==='signup'?'#2d5b3d':'transparent',color:mode==='signup'?'#fff':'#6b8c74',fontWeight:700,cursor:'pointer',fontSize:13}}>Créer un compte</button>
+        </div>
+
         <input placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)}
           style={{width:'100%',padding:'10px 12px',border:'1.5px solid #dde8e0',borderRadius:8,fontSize:14,marginBottom:12,boxSizing:'border-box'}}/>
         <input type="password" placeholder="Mot de passe" value={password} onChange={e=>setPassword(e.target.value)}
           style={{width:'100%',padding:'10px 12px',border:'1.5px solid #dde8e0',borderRadius:8,fontSize:14,marginBottom:16,boxSizing:'border-box'}}/>
+        
         {authError && <div style={{color:'#c0392b',fontSize:13,marginBottom:12}}>{authError}</div>}
-        <button onClick={login} style={{width:'100%',padding:'11px',background:'#2d5b3d',color:'#fff',border:'none',borderRadius:9,fontWeight:700,fontSize:15,cursor:'pointer'}}>
-          Se connecter
+        {authSuccess && <div style={{color:'#2d5b3d',fontSize:13,marginBottom:12}}>{authSuccess}</div>}
+        
+        <button onClick={mode==='login'?login:signup} style={{width:'100%',padding:'11px',background:'#2d5b3d',color:'#fff',border:'none',borderRadius:9,fontWeight:700,fontSize:15,cursor:'pointer'}}>
+          {mode==='login'?'Se connecter':'Créer mon compte'}
         </button>
       </div>
     </div>
