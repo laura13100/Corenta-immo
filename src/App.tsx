@@ -788,35 +788,6 @@ function LocCard({l,lot,onDel}){
   );
 }
 
-function FiscalSec({bien,st,an}){
-  const {R:loyers,ded,cap,int:interets,res}=st;
-  const reg=bien.regime||"";
-  return(
-    <>
-      <Card sx={{border:`2px solid ${C.g}`}}>
-        <div style={{fontWeight:800,color:C.g,marginBottom:4}}>Récapitulatif fiscal {an}</div>
-        <div style={{fontSize:12,color:C.tm,marginBottom:14}}>Régime : <strong>{reg}</strong> — {bien.nom}</div>
-        <FL label="Revenus bruts encaissés" v={euro(loyers)} bold/>
-        <Div/>
-        <div style={{fontSize:11,fontWeight:700,color:C.tm,margin:"4px 0 6px",textTransform:"uppercase",letterSpacing:".05em"}}>Charges déductibles</div>
-        {interets>0&&<FL label="Intérêts d'emprunt" v={euro(interets)} indent/>}
-        {ded-interets>0&&<FL label="Autres charges déductibles" v={euro(ded-interets)} indent/>}
-        <Div/>
-        <FL label="Total déductible" v={euro(ded)} bold/>
-        {cap>0&&<FL label="Capital remboursé (non déductible)" v={euro(cap)} muted/>}
-        <Div/>
-        <FL label={`Résultat ${res>=0?"bénéficiaire":"déficitaire"}`} v={euro(res)} bold col={res>=0?C.g:C.rd}/>
-      </Card>
-      <Card sx={{background:C.gp,border:`1px solid ${C.g}`}}>
-        <div style={{fontSize:12,fontWeight:700,color:C.g,marginBottom:8}}>💡 À reporter en déclaration</div>
-        {reg.includes("2044")&&<div style={{fontSize:13,lineHeight:1.8}}><b>Formulaire 2044</b><br/>Ligne 211 (Loyers) : <strong>{euro(loyers)}</strong><br/>Ligne 221 (Intérêts) : <strong>{euro(interets)}</strong><br/>Ligne 229 (Autres charges) : <strong>{euro(ded-interets)}</strong><br/>Résultat net : <strong style={{color:res>=0?C.g:C.rd}}>{euro(res)}</strong></div>}
-        {reg.includes("BIC")&&<div style={{fontSize:13,lineHeight:1.8}}><b>Liasse BIC (2031 / 2033)</b><br/>CA : <strong>{euro(loyers)}</strong><br/>Charges : <strong>{euro(ded)}</strong><br/>Résultat : <strong style={{color:res>=0?C.g:C.rd}}>{euro(res)}</strong></div>}
-        {reg.includes("Micro-foncier")&&<div style={{fontSize:13,lineHeight:1.8}}><b>Déclaration 2042 — Case 4BE</b><br/>Loyers bruts : <strong>{euro(loyers)}</strong><br/>(abattement 30 % calculé automatiquement)</div>}
-        {reg.includes("Micro-BIC")&&<div style={{fontSize:13,lineHeight:1.8}}><b>Déclaration 2042 C PRO</b><br/>Recettes BIC : <strong>{euro(loyers)}</strong><br/>(abattement 50 % calculé automatiquement)</div>}
-      </Card>
-    </>
-  );
-}
 
 function TVASec({txs, lots, an}){
   const txAn = txs.filter(t=>String(t.date).startsWith(String(an)));
