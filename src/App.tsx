@@ -1,4 +1,5 @@
 import{useState,useEffect,useMemo}from"react";
+import BiensPage from"./BiensPage";
 const TL=[{id:"airbnb",label:"Airbnb/Saisonnier",emoji:"🏖",rc:"Loyer Airbnb / saisonnier"},{id:"meuble",label:"Bail meublé (LMNP)",emoji:"🛋",rc:"Loyer meublé"},{id:"nu",label:"Bail nu",emoji:"🏠",rc:"Loyer nu"},{id:"professionnel",label:"Bail professionnel équipé",emoji:"💼",rc:"Loyer professionnel équipé"},{id:"commercial",label:"Bail commercial",emoji:"🏪",rc:"Loyer commercial"},{id:"parking",label:"Parking/Cave",emoji:"🅿️",rc:"Loyer parking"}];
 const LM=Object.fromEntries(TL.map(t=>[t.id,t]));
 const LC={airbnb:{bg:"#eaf4fb",tx:"#2471a3"},meuble:{bg:"#e6efe9",tx:"#2d5b3d"},nu:{bg:"#eeebe3",tx:"#6b8c74"},professionnel:{bg:"#fef9e7",tx:"#b7860b"},commercial:{bg:"#fdf2e9",tx:"#ca6f1e"},parking:{bg:"#f4ecf7",tx:"#7d3c98"}};
@@ -81,7 +82,7 @@ export default function App(){
     </div>
 
     <div style={{background:C.wh,borderBottom:`2px solid ${C.br}`,display:"flex",gap:2,padding:"8px 14px 0",overflowX:"auto"}}>
-      {[["dash","🏘 Tableau de bord"],bn&&["bien",`🏠 ${bn.nom}`],lt&&["lot",`${LM[lt.typeLot]?.emoji||""} ${lt.nom}`]].filter(Boolean).map(([k,l])=>(
+      {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],bn&&["bien",`🏠 ${bn.nom}`],lt&&["lot",`${LM[lt.typeLot]?.emoji||""} ${lt.nom}`]].filter(Boolean).map(([k,l])=>(
         <button key={k} onClick={()=>{if(k==="bien"){sP("bien");sLi(null);sSb(im?"lots":"apercu");}else sP(k);}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:pg===k?C.g:"transparent",color:pg===k?"#fff":C.g}}>{l}</button>
       ))}
       <div style={{flex:1}}/>
@@ -113,6 +114,7 @@ export default function App(){
         })}
       </>)}
 
+      {pg==="biens"&&<BiensPage/>}
       {pg==="bien"&&bn&&(<>
         <div style={{display:"flex",gap:4,marginBottom:16,flexWrap:"wrap"}}>{(im?NI:NB).map(([k,l])=>(<button key={k} onClick={()=>sSb(k)} style={{padding:"6px 12px",borderRadius:8,border:`1.5px solid ${sb===k?C.g:C.br}`,background:sb===k?C.g:C.wh,color:sb===k?"#fff":C.tx,fontWeight:600,fontSize:12,cursor:"pointer",fontFamily:"inherit"}}>{l}</button>))}</div>
 
