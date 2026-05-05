@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import BiensPage from "./BiensPage";
 import RecettesPage from "./RecettesPage";
 import DepensesPage from "./DepensesPage";
+import DocumentsPage from "./DocumentsPage";
 
 const TYPES_LOT = [
   { id:"airbnb",       label:"Airbnb / Saisonnier",           emoji:"🏖", revCat:"Loyer Airbnb / saisonnier" },
@@ -245,7 +246,7 @@ export default function App(){
 
       {/* NAV */}
       <div style={{background:C.wh,borderBottom:`2px solid ${C.br}`,display:"flex",gap:2,padding:"8px 14px 0",overflowX:"auto"}}>
-        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],bien&&["bien",`🏠 ${bien.nom}`],lot&&["lot",`${LOT_MAP[lot.typeLot]?.emoji||""} ${lot.nom}`]].filter(Boolean).map(([k,l])=>(
+        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],["documents","📂 Documents"],bien&&["bien",`🏠 ${bien.nom}`],lot&&["lot",`${LOT_MAP[lot.typeLot]?.emoji||""} ${lot.nom}`]].filter(Boolean).map(([k,l])=>(
           <button key={k} onClick={()=>{if(k==="bien"){setPage("bien");setLotId(null);setSub(isImm?"lots":"apercu");}else setPage(k);}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page===k?C.g:"transparent",color:page===k?"#fff":C.g}}>{l}</button>
         ))}
         <div style={{flex:1}}/>
@@ -319,6 +320,9 @@ export default function App(){
 
         {/* ══ PAGE DÉPENSES ══ */}
         {page==="depenses"&&<DepensesPage/>}
+
+        {/* ══ PAGE DOCUMENTS ══ */}
+        {page==="documents"&&<DocumentsPage/>}
 
         {/* ══ PAGE BIEN ══ */}
         {page==="bien"&&bien&&(
