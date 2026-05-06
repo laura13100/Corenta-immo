@@ -232,6 +232,7 @@ export default function App(){
         @keyframes ti{from{opacity:0;transform:translateX(-50%) translateY(14px)}to{opacity:1;transform:translateX(-50%) translateY(0)}}
         .hov:hover{box-shadow:0 4px 20px rgba(45,91,61,.14)!important;transform:translateY(-2px)}
         .trow:hover{background:${C.gp}!important}
+        .nav-scroll{scrollbar-width:none}.nav-scroll::-webkit-scrollbar{display:none}
       `}</style>
 
       {/* HEADER */}
@@ -246,10 +247,13 @@ export default function App(){
       </div>
 
       {/* NAV */}
-      <div style={{background:C.wh,borderBottom:`2px solid ${C.br}`,display:"flex",gap:2,padding:"8px 14px 0",overflowX:"auto"}}>
-        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],["documents","📂 Documents"],["bilan","📊 Bilan fiscal"],bien&&["bien",`🏠 ${bien.nom}`],lot&&["lot",`${LOT_MAP[lot.typeLot]?.emoji||""} ${lot.nom}`]].filter(Boolean).map(([k,l])=>(
-          <button key={k} onClick={()=>{if(k==="bien"){setPage("bien");setLotId(null);setSub(isImm?"lots":"apercu");}else setPage(k);}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page===k?C.g:"transparent",color:page===k?"#fff":C.g}}>{l}</button>
+      <div className="nav-scroll" style={{background:C.wh,borderBottom:`2px solid ${C.br}`,display:"flex",gap:2,padding:"8px 14px 0",overflowX:"auto"}}>
+        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],["documents","📂 Documents"],["bilan","📊 Bilan fiscal"]].map(([k,l])=>(
+          <button key={k} onClick={()=>setPage(k)} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page===k?C.g:"transparent",color:page===k?"#fff":C.g}}>{l}</button>
         ))}
+        {(bien||lot)&&<div style={{width:1,background:C.br,margin:"8px 6px 2px",flexShrink:0}}/>}
+        {bien&&<button onClick={()=>{setPage("bien");setLotId(null);setSub(isImm?"lots":"apercu");}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="bien"?C.g:C.gp,color:page==="bien"?"#fff":C.gl}}>🏠 {bien.nom}</button>}
+        {lot&&<button onClick={()=>setPage("lot")} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="lot"?C.g:C.gp,color:page==="lot"?"#fff":C.gl}}>{LOT_MAP[lot.typeLot]?.emoji||""} {lot.nom}</button>}
         <div style={{flex:1}}/>
         {page==="dash"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>openM("addBien",{type:TYPES_BIEN[0],regime:REGIMES[0]})}>+ Nouveau bien</Btn>}
         {page==="bien"&&isImm&&sub==="lots"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>openM("addLot",{typeLot:"meuble"})}>+ Nouveau lot</Btn>}

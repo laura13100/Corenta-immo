@@ -416,7 +416,7 @@ export default function DepensesPage() {
         </div>
         <button
           onClick={() => setShowAdd(true)}
-          style={{ background:C.rd, color:"#fff", border:"none", borderRadius:10, padding:"10px 18px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
+          style={{ background:C.g, color:"#fff", border:"none", borderRadius:10, padding:"10px 18px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
         >
           + Ajouter
         </button>
@@ -484,7 +484,7 @@ export default function DepensesPage() {
           <div style={{ color:C.tm, fontSize:13, marginBottom:20 }}>Modifiez les filtres ou ajoutez une dépense.</div>
           <button
             onClick={() => setShowAdd(true)}
-            style={{ background:C.rd, color:"#fff", border:"none", borderRadius:10, padding:"11px 22px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
+            style={{ background:C.g, color:"#fff", border:"none", borderRadius:10, padding:"11px 22px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
           >
             + Ajouter une dépense
           </button>
