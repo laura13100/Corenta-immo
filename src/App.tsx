@@ -4,6 +4,8 @@ import RecettesPage from "./RecettesPage";
 import DepensesPage from "./DepensesPage";
 import DocumentsPage from "./DocumentsPage";
 import BilanPage from "./BilanPage";
+import AuthPage from "./AuthPage";
+import { supabase } from "./supabase";
 
 const TYPES_LOT = [
   { id:"airbnb",       label:"Airbnb / Saisonnier",           emoji:"🏖", revCat:"Loyer Airbnb / saisonnier" },
@@ -127,6 +129,19 @@ export default function App(){
   const [toast,setToast]=useState(null);
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({});
+  const [user,setUser]=useState(null);
+  const [authChecking,setAuthChecking]=useState(true);
+
+  useEffect(()=>{
+    supabase.auth.getSession().then(({data:{session}})=>{
+      setUser(session?.user??null);
+      setAuthChecking(false);
+    });
+    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
+      setUser(session?.user??null);
+    });
+    return ()=>subscription.unsubscribe();
+  },[]);
 
   useEffect(()=>{ try{localStorage.setItem(KEY,JSON.stringify(data));}catch{} },[data]);
 
@@ -221,6 +236,17 @@ export default function App(){
   const NAV_BIE=[["apercu","📊 Aperçu"],["revenus","💰 Revenus"],["charges","📉 Charges"],["locataires","👤 Locataires"],["tva","🔵 TVA"],["docs","📎 Documents"],["fiscal","📋 Déclaration"],["infos","⚙️ Infos"]];
   const NAV_LOT=[["apercu_l","📊 Aperçu"],["rev_l","💰 Revenus"],["chg_l","📉 Charges"],["loc_l","👤 Locataire"],["tva_l","🔵 TVA"],["docs_l","📎 Documents"],["infos_l","⚙️ Infos"]];
 
+  if (authChecking) return (
+    <div style={{minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",background:C.cr,fontFamily:"'Figtree',sans-serif"}}>
+      <div style={{textAlign:"center",color:C.tm}}>
+        <div style={{fontSize:32,marginBottom:12,opacity:.4}}>⏳</div>
+        <div style={{fontSize:14}}>Chargement…</div>
+      </div>
+    </div>
+  );
+
+  if (!user) return <AuthPage />;
+
   return (
     <div style={{fontFamily:"'Figtree',sans-serif",background:C.cr,minHeight:"100vh",color:C.tx}}>
       <style>{`
@@ -241,9 +267,14 @@ export default function App(){
           <div style={{fontSize:22,fontWeight:900,color:"#fff",letterSpacing:"-0.5px"}}><span style={{fontWeight:300}}>Co</span>renta <span style={{fontSize:12,fontWeight:400,opacity:.6}}>Immobilier</span></div>
           <div style={{fontSize:11,color:"rgba(255,255,255,.6)",fontWeight:500}}>Gestion · Rentabilité · Déclaration fiscale</div>
         </div>
-        <select value={an} onChange={e=>setAn(Number(e.target.value))} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"rgba(255,255,255,.15)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
-          {ANNEES.map(a=><option key={a} value={a} style={{color:C.tx}}>{a}</option>)}
-        </select>
+        <div style={{display:"flex",alignItems:"center",gap:10}}>
+          <select value={an} onChange={e=>setAn(Number(e.target.value))} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"rgba(255,255,255,.15)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
+            {ANNEES.map(a=><option key={a} value={a} style={{color:C.tx}}>{a}</option>)}
+          </select>
+          <button onClick={()=>supabase.auth.signOut()} style={{padding:"6px 12px",borderRadius:8,border:"1px solid rgba(255,255,255,.3)",background:"transparent",color:"rgba(255,255,255,.8)",fontSize:12,fontWeight:600,fontFamily:"inherit",cursor:"pointer"}}>
+            Déconnexion
+          </button>
+        </div>
       </div>
 
       {/* NAV */}
