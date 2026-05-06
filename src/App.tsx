@@ -4,8 +4,6 @@ import RecettesPage from "./RecettesPage";
 import DepensesPage from "./DepensesPage";
 import DocumentsPage from "./DocumentsPage";
 import BilanPage from "./BilanPage";
-import AuthPage from "./AuthPage";
-import { supabase } from "./supabase";
 
 const TYPES_LOT = [
   { id:"airbnb",       label:"Airbnb / Saisonnier",           emoji:"🏖", revCat:"Loyer Airbnb / saisonnier" },
@@ -129,21 +127,8 @@ export default function App(){
   const [toast,setToast]=useState(null);
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({});
-  const [user,setUser]=useState(null);
-  const [authChecking,setAuthChecking]=useState(true);
 
   useEffect(()=>{ try{localStorage.setItem(KEY,JSON.stringify(data));}catch{} },[data]);
-
-  useEffect(()=>{
-    supabase.auth.getSession().then(({data:{session}})=>{
-      setUser(session?.user??null);
-      setAuthChecking(false);
-    });
-    const {data:{subscription}}=supabase.auth.onAuthStateChange((_,session)=>{
-      setUser(session?.user??null);
-    });
-    return ()=>subscription.unsubscribe();
-  },[]);
 
   const bien=useMemo(()=>data.biens.find(b=>b.id===bienId),[data.biens,bienId]);
   const isImm=bien?.type==="Immeuble (multi-lots)";
@@ -236,9 +221,6 @@ export default function App(){
   const NAV_BIE=[["apercu","📊 Aperçu"],["revenus","💰 Revenus"],["charges","📉 Charges"],["locataires","👤 Locataires"],["tva","🔵 TVA"],["docs","📎 Documents"],["fiscal","📋 Déclaration"],["infos","⚙️ Infos"]];
   const NAV_LOT=[["apercu_l","📊 Aperçu"],["rev_l","💰 Revenus"],["chg_l","📉 Charges"],["loc_l","👤 Locataire"],["tva_l","🔵 TVA"],["docs_l","📎 Documents"],["infos_l","⚙️ Infos"]];
 
-  if(authChecking) return <div style={{minHeight:"100vh",background:C.cr,display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Figtree',sans-serif"}}><span style={{opacity:.3,fontSize:32}}>⏳</span></div>;
-  if(!user) return <AuthPage/>;
-
   return (
     <div style={{fontFamily:"'Figtree',sans-serif",background:C.cr,minHeight:"100vh",color:C.tx}}>
       <style>{`
@@ -261,7 +243,6 @@ export default function App(){
         <select value={an} onChange={e=>setAn(Number(e.target.value))} style={{padding:"6px 10px",borderRadius:8,border:"none",background:"rgba(255,255,255,.15)",color:"#fff",fontSize:13,fontWeight:700,fontFamily:"inherit",cursor:"pointer"}}>
           {ANNEES.map(a=><option key={a} value={a} style={{color:C.tx}}>{a}</option>)}
         </select>
-        <button onClick={()=>supabase.auth.signOut()} style={{padding:"6px 12px",border:"none",borderRadius:8,background:"rgba(255,255,255,.15)",color:"rgba(255,255,255,.9)",fontWeight:700,fontSize:12,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap"}}>Déconnexion</button>
       </div>
 
       {/* NAV */}

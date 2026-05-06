@@ -84,7 +84,6 @@ export default function AuthPage() {
 
       <div style={{ background:C.wh, borderRadius:20, padding:"36px 28px", maxWidth:420, width:"100%", boxShadow:"0 4px 32px rgba(45,91,61,.12)" }}>
 
-        {/* Logo */}
         <div style={{ textAlign:"center", marginBottom:28 }}>
           <div style={{ fontSize:34, fontWeight:900, color:C.g, letterSpacing:"-0.5px" }}>
             <span style={{ fontWeight:300 }}>Co</span>renta
@@ -92,7 +91,6 @@ export default function AuthPage() {
           <div style={{ fontSize:13, color:C.tm, marginTop:4 }}>Gestion immobilière personnelle</div>
         </div>
 
-        {/* Mode selector */}
         <div style={{ display:"flex", background:C.cr, borderRadius:10, padding:4, marginBottom:24, gap:4 }}>
           {(["login", "signup"] as const).map(m => (
             <button
@@ -111,7 +109,6 @@ export default function AuthPage() {
           ))}
         </div>
 
-        {/* Champs */}
         <input
           type="email"
           placeholder="Email"
@@ -131,14 +128,12 @@ export default function AuthPage() {
           style={inputStyle}
         />
 
-        {/* Erreur */}
         {error && (
           <div style={{ background:C.rp, color:C.rd, borderRadius:8, padding:"10px 14px", fontSize:13, marginBottom:14, fontWeight:600 }}>
             {error}
           </div>
         )}
 
-        {/* Bouton */}
         <button
           onClick={submit}
           disabled={loading}
