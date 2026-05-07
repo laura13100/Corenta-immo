@@ -553,8 +553,12 @@ export default function BiensPage() {
   const [selected, setSelected]   = useState<Selection | null>(null)
   const [showAdd, setShowAdd]     = useState<"simple" | "immeuble" | null>(null)
   const [addLotFor, setAddLotFor] = useState<string | null>(null)
+  const [userId, setUserId]       = useState<string | null>(null)
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null))
+    load()
+  }, [])
 
   async function load() {
     setLoading(true)
@@ -582,30 +586,33 @@ export default function BiensPage() {
   }
 
   async function handleAddSimple(f: any) {
+    if (!userId) { setDbError("Utilisateur non connecté."); return }
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ nom: f.nom.trim(), adresse: f.adresse.trim() || null, type: f.type, regime_fiscal: f.regime })
+      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, type: f.type, regime_fiscal: f.regime })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToSimple(data)])
   }
 
   async function handleAddImmeuble(f: any) {
+    if (!userId) { setDbError("Utilisateur non connecté."); return }
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "immeuble" }) })
+      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "immeuble" }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToImmeuble(data, [])])
   }
 
   async function handleAddLot(immeubleId: string, f: any) {
+    if (!userId) { setDbError("Utilisateur non connecté."); return }
     setAddLotFor(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "lot", parent: immeubleId }) })
+      .insert({ owner_id: userId, nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "lot", parent: immeubleId }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     const newLot = rowToLot(data, { kind: "lot", parent: immeubleId })
