@@ -11,6 +11,7 @@ export interface AddBienFormData {
   nom: string
   adresse: string
   type: string
+  mode_exploitation: string
   mode_detention: string
   regime_fiscal: string
   valeurAchat: string
@@ -21,6 +22,7 @@ export interface AddBienFormData {
 
 export const ADD_BIEN_DEFAULTS: AddBienFormData = {
   nom: "", adresse: "", type: "Appartement",
+  mode_exploitation: "meuble",
   mode_detention: "nom-propre", regime_fiscal: "ir-foncier-reel",
   valeurAchat: "", surface: "", anneeAcquisition: "", notes: "",
 }
@@ -98,6 +100,16 @@ export function AddBienModal({
           <option value="Local commercial">Local commercial</option>
           <option value="Immeuble (multi-lots)">Immeuble (multi-lots)</option>
           <option value="Autre">Autre</option>
+        </Sel>
+
+        <Sel label="Mode d'exploitation" value={f.mode_exploitation} onChange={set("mode_exploitation")}>
+          <option value="nu">Location nue longue durée</option>
+          <option value="meuble">Location meublée longue durée</option>
+          <option value="airbnb">Location courte durée / Airbnb</option>
+          <option value="commercial">Local commercial</option>
+          <option value="mixte">Usage mixte</option>
+          <option value="vacant">Vacant</option>
+          <option value="autre">Autre</option>
         </Sel>
 
         <Sel label="Structure de détention" value={f.mode_detention} onChange={set("mode_detention")}>

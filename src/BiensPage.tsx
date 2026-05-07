@@ -13,24 +13,44 @@ const C = {
 
 const euro = (n: number) => n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })
 
-type TypeBien      = "appartement" | "maison" | "garage" | "local" | "autre"
-type Statut        = "loue" | "vacant"
-type ModeDetention = "nom-propre" | "indivision" | "sci" | "sarl-famille" | "sas" | "holding" | "autre"
-type RegimeFiscal  = "ir-foncier-reel" | "ir-foncier-micro" | "ir-lmnp-reel" | "ir-lmnp-micro" | "ir-lmp" | "is" | "autre"
+type TypeBien        = "appartement" | "maison" | "garage" | "local" | "autre"
+type Statut          = "loue" | "vacant"
+type ModeDetention   = "nom-propre" | "indivision" | "sci" | "sarl-famille" | "sas" | "holding" | "autre"
+type RegimeFiscal    = "ir-foncier-reel" | "ir-foncier-micro" | "ir-lmnp-reel" | "ir-lmnp-micro" | "ir-lmp" | "is" | "autre"
+type ModeExploitation = "nu" | "meuble" | "airbnb" | "commercial" | "mixte" | "vacant" | "autre"
+type TypeContrat     = "nu" | "meuble" | "commercial" | "mobilite" | "autre"
+type StatutLocataire = "en_place" | "preavis" | "parti"
+
+interface Locataire {
+  id: string; bien_id: string | null; lot_id: string | null
+  prenom: string; nom: string; email: string; tel: string
+  type_contrat: TypeContrat; statut: StatutLocataire
+  loyer: number; charges: number; depot_garantie: number
+  date_entree: string; date_sortie: string; notes_text: string
+}
+
+interface LocataireForm {
+  prenom: string; nom: string; email: string; tel: string
+  type_contrat: string; statut: string
+  loyer: string; charges: string; depot_garantie: string
+  date_entree: string; date_sortie: string; notes: string
+}
 
 interface BienSimple {
   kind: "simple"
   id: string; nom: string; adresse: string
-  type: TypeBien; mode_detention: ModeDetention; regime_fiscal: RegimeFiscal; statut: Statut
-  locataire?: string
+  type: TypeBien; mode_detention: ModeDetention; regime_fiscal: RegimeFiscal
+  mode_exploitation: ModeExploitation; statut: Statut
+  locataire?: string; locataires: Locataire[]
   loyer_hc: number; charges: number; depenses: number
   valeurAchat: string; surface: string; anneeAcquisition: string; notes_text: string
 }
 
 interface Lot {
   id: string; immeuble_id: string; nom: string
-  type: TypeBien; regime_fiscal: RegimeFiscal; statut: Statut
-  locataire?: string
+  type: TypeBien; regime_fiscal: RegimeFiscal
+  mode_exploitation: ModeExploitation; statut: Statut
+  locataire?: string; locataires: Locataire[]
   loyer_hc: number; charges: number; depenses: number
 }
 
@@ -62,6 +82,29 @@ const MODE_DETENTION_LABELS: Record<ModeDetention, string> = {
   "holding":      "Holding",
   "autre":        "Autre",
 }
+const MODE_EXPL_LABELS: Record<ModeExploitation, string> = {
+  "nu": "Location nue longue durée", "meuble": "Location meublée longue durée",
+  "airbnb": "Courte durée / Airbnb", "commercial": "Local commercial",
+  "mixte": "Usage mixte", "vacant": "Vacant", "autre": "Autre",
+}
+const MODE_EXPL_COLOR: Record<ModeExploitation, string> = {
+  "nu": C.g, "meuble": C.g, "airbnb": "#2471a3", "commercial": "#ca6f1e",
+  "mixte": "#7d3c98", "vacant": C.rd, "autre": C.tm,
+}
+const MODE_EXPL_BG: Record<ModeExploitation, string> = {
+  "nu": C.gp, "meuble": C.gp, "airbnb": "#eaf4fb", "commercial": "#fdf2e9",
+  "mixte": "#f4ecf7", "vacant": C.rp, "autre": C.cr2,
+}
+const TYPE_CONTRAT_LABELS: Record<TypeContrat, string> = {
+  "nu": "Bail nu", "meuble": "Bail meublé", "commercial": "Bail commercial",
+  "mobilite": "Bail mobilité", "autre": "Autre",
+}
+const STATUT_LOC_LABELS: Record<StatutLocataire, string> = {
+  "en_place": "En place", "preavis": "En préavis", "parti": "Parti",
+}
+const STATUT_LOC_COLOR: Record<StatutLocataire, string> = { "en_place": C.g, "preavis": "#ca6f1e", "parti": C.rd }
+const STATUT_LOC_BG: Record<StatutLocataire, string>    = { "en_place": C.gp, "preavis": "#fdf2e9", "parti": C.rp }
+
 const REGIME_FISCAL_LABELS: Record<RegimeFiscal, string> = {
   "ir-foncier-reel":  "IR — foncier réel",
   "ir-foncier-micro": "IR — micro-foncier",
@@ -105,15 +148,45 @@ function parseRegimeFiscal(v: string): RegimeFiscal {
   return compat[v] ?? "ir-foncier-micro"
 }
 
-function rowToSimple(row: any): BienSimple {
+function activeLocataire(locs: Locataire[]): Locataire | undefined {
+  return locs.find(l => l.statut !== "parti")
+}
+
+function needsLocataire(mode: ModeExploitation): boolean {
+  return !["airbnb", "vacant"].includes(mode)
+}
+
+function rowToLocataire(row: any): Locataire {
   const meta = parseMeta(row)
+  return {
+    id: row.id, bien_id: row.bien_id ?? null, lot_id: row.lot_id ?? null,
+    prenom: meta.prenom ?? "", nom: row.nom ?? "",
+    email: row.email ?? "", tel: row.tel ?? "",
+    type_contrat: (row.type_contrat ?? "nu") as TypeContrat,
+    statut: (row.statut ?? "en_place") as StatutLocataire,
+    loyer: Number(row.loyer ?? 0), charges: Number(meta.charges ?? 0),
+    depot_garantie: Number(row.depot_garantie ?? 0),
+    date_entree: row.date_entree ?? "", date_sortie: row.date_sortie ?? "",
+    notes_text: meta.notes_text ?? "",
+  }
+}
+
+function rowToSimple(row: any, locs: Locataire[] = []): BienSimple {
+  const meta = parseMeta(row)
+  const mode = (meta.mode_exploitation ?? "autre") as ModeExploitation
+  const active = activeLocataire(locs)
   return {
     kind: "simple",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
     type: (row.type ?? "appartement") as TypeBien,
     mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
     regime_fiscal: parseRegimeFiscal(row.regime ?? "ir-foncier-micro"),
-    statut: "vacant", loyer_hc: Number(row.loyer_cible ?? 0), charges: 0, depenses: 0,
+    mode_exploitation: mode,
+    statut: active ? "loue" : "vacant",
+    locataire: active ? `${active.prenom} ${active.nom}`.trim() : undefined,
+    locataires: locs,
+    loyer_hc: active ? active.loyer : Number(row.loyer_cible ?? 0),
+    charges: active ? active.charges : 0, depenses: 0,
     valeurAchat: row.valeur_achat ? String(row.valeur_achat) : (meta.valeurAchat ?? ""),
     surface: row.surface ? String(row.surface) : (meta.surface ?? ""),
     anneeAcquisition: row.annee_acquisition ?? (meta.anneeAcquisition ?? ""),
@@ -132,14 +205,21 @@ function rowToImmeuble(row: any, lots: Lot[]): Immeuble {
   }
 }
 
-function rowToLot(row: any): Lot {
+function rowToLot(row: any, locs: Locataire[] = []): Lot {
   const meta = parseMeta(row)
+  const mode = (meta.mode_exploitation ?? "autre") as ModeExploitation
+  const active = activeLocataire(locs)
   return {
     id: row.id, immeuble_id: row.bien_id ?? "",
     nom: row.nom,
     type: ((row.type_lot ?? "appartement") as TypeBien),
     regime_fiscal: parseRegimeFiscal(meta.regime_fiscal ?? "ir-foncier-micro"),
-    statut: "vacant", loyer_hc: Number(row.loyer ?? 0), charges: 0, depenses: 0,
+    mode_exploitation: mode,
+    statut: active ? "loue" : "vacant",
+    locataire: active ? `${active.prenom} ${active.nom}`.trim() : undefined,
+    locataires: locs,
+    loyer_hc: active ? active.loyer : Number(row.loyer ?? 0),
+    charges: active ? active.charges : 0, depenses: 0,
   }
 }
 
@@ -205,6 +285,139 @@ function SaveBtn({ label, disabled, onClick }: { label: string; disabled?: boole
   )
 }
 
+function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initial }: {
+  onClose: () => void; onSave: (f: LocataireForm) => void
+  title?: string; initial?: Partial<LocataireForm>
+}) {
+  const DEF: LocataireForm = {
+    prenom: "", nom: "", email: "", tel: "",
+    type_contrat: "meuble", statut: "en_place",
+    loyer: "", charges: "", depot_garantie: "",
+    date_entree: "", date_sortie: "", notes: "",
+  }
+  const [f, setF] = useState<LocataireForm>({ ...DEF, ...initial })
+  const set = (k: keyof LocataireForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF(p => ({ ...p, [k]: e.target.value }))
+  return (
+    <Modal title={title} onClose={onClose}>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldInput label="Prénom" value={f.prenom} onChange={set("prenom")} />
+        <FieldInput label="Nom *" value={f.nom} onChange={set("nom")} />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldInput label="Email" type="email" value={f.email} onChange={set("email")} />
+        <FieldInput label="Téléphone" value={f.tel} onChange={set("tel")} />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldSelect label="Type de bail" value={f.type_contrat} onChange={set("type_contrat")}>
+          <option value="nu">Bail nu</option>
+          <option value="meuble">Bail meublé</option>
+          <option value="commercial">Bail commercial</option>
+          <option value="mobilite">Bail mobilité</option>
+          <option value="autre">Autre</option>
+        </FieldSelect>
+        <FieldSelect label="Statut" value={f.statut} onChange={set("statut")}>
+          <option value="en_place">En place</option>
+          <option value="preavis">En préavis</option>
+          <option value="parti">Parti</option>
+        </FieldSelect>
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldInput label="Date d'entrée" type="date" value={f.date_entree} onChange={set("date_entree")} />
+        <FieldInput label="Date de sortie" type="date" value={f.date_sortie} onChange={set("date_sortie")} />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
+        <FieldInput label="Loyer HC (€)" type="number" value={f.loyer} onChange={set("loyer")} />
+        <FieldInput label="Charges (€)" type="number" value={f.charges} onChange={set("charges")} />
+        <FieldInput label="Dépôt de garantie (€)" type="number" value={f.depot_garantie} onChange={set("depot_garantie")} />
+      </div>
+      <FieldInput label="Notes" value={f.notes} onChange={set("notes")} />
+      <SaveBtn label="Enregistrer" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
+    </Modal>
+  )
+}
+
+function LocataireSection({ mode_exploitation, locataires, onAdd, onEdit, onDelete }: {
+  mode_exploitation: ModeExploitation
+  locataires: Locataire[]
+  onAdd: () => void
+  onEdit: (loc: Locataire) => void
+  onDelete: (loc: Locataire) => void
+}) {
+  if (mode_exploitation === "airbnb") {
+    return (
+      <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
+        <SectionTitle>Mode d'exploitation</SectionTitle>
+        <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+          <span style={{ fontSize:24 }}>🏖</span>
+          <div>
+            <div style={{ fontWeight:700, fontSize:14, color:C.tx }}>Location courte durée / Airbnb</div>
+            <div style={{ fontSize:12, color:C.tm, marginTop:2 }}>Pas de locataire permanent.</div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+  if (mode_exploitation === "vacant") {
+    return (
+      <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
+        <SectionTitle>Locataire</SectionTitle>
+        <div style={{ color:C.rd, fontWeight:700, fontSize:14 }}>🔴 Bien vacant</div>
+      </div>
+    )
+  }
+  const active = activeLocataire(locataires)
+  const anciens = locataires.filter(l => l.statut === "parti")
+  return (
+    <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:active?12:8 }}>
+        <SectionTitle>Locataire</SectionTitle>
+        {!active && (
+          <button onClick={onAdd} style={{ background:C.gp, color:C.g, border:"none", borderRadius:8, padding:"5px 12px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>+ Ajouter</button>
+        )}
+      </div>
+      {active ? (
+        <div>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:8 }}>
+            <div>
+              <div style={{ fontWeight:800, fontSize:15, color:C.tx }}>👤 {active.prenom} {active.nom}</div>
+              {active.email && <div style={{ fontSize:12, color:C.tm, marginTop:2 }}>✉️ {active.email}</div>}
+              {active.tel   && <div style={{ fontSize:12, color:C.tm }}>📞 {active.tel}</div>}
+            </div>
+            <div style={{ display:"flex", gap:6 }}>
+              <button onClick={() => onEdit(active)} style={{ background:C.gp, color:C.g, border:"none", borderRadius:8, padding:"5px 10px", fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>✏️</button>
+              <button onClick={() => onDelete(active)} style={{ background:C.rp, color:C.rd, border:"none", borderRadius:8, padding:"5px 10px", fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit" }}>🗑</button>
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+            <Badge label={STATUT_LOC_LABELS[active.statut]} bg={STATUT_LOC_BG[active.statut]} color={STATUT_LOC_COLOR[active.statut]} />
+            <Badge label={TYPE_CONTRAT_LABELS[active.type_contrat]} bg={C.bp} color={C.bl} />
+          </div>
+          <InfoRow label="Loyer HC" value={euro(active.loyer)} />
+          {active.charges > 0 && <InfoRow label="Charges" value={euro(active.charges)} />}
+          {active.depot_garantie > 0 && <InfoRow label="Dépôt de garantie" value={euro(active.depot_garantie)} />}
+          {active.date_entree && <InfoRow label="Entrée" value={active.date_entree.split("-").reverse().join("/")} />}
+          {active.date_sortie && <InfoRow label="Sortie prévue" value={active.date_sortie.split("-").reverse().join("/")} />}
+          {active.notes_text && <div style={{ fontSize:12, color:C.tm, marginTop:8, fontStyle:"italic" }}>{active.notes_text}</div>}
+        </div>
+      ) : (
+        <div style={{ color:C.rd, fontWeight:700, fontSize:14 }}>🔴 Vacant</div>
+      )}
+      {anciens.length > 0 && (
+        <div style={{ marginTop:14, paddingTop:12, borderTop:`1px solid ${C.br}` }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.tm, textTransform:"uppercase", marginBottom:6 }}>Anciens locataires</div>
+          {anciens.map(l => (
+            <div key={l.id} style={{ fontSize:12, color:C.tm, padding:"4px 0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <span>👤 {l.prenom} {l.nom}</span>
+              <button onClick={() => onDelete(l)} style={{ background:"none", border:"none", color:C.rd, cursor:"pointer", fontSize:11, padding:"0 4px" }}>✕</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DetailBanner({ title, subtitle, cashflow, lots }: { title: string; subtitle?: string; cashflow: number; lots?: number }) {
   return (
     <div style={{ background:`linear-gradient(135deg,${C.g},${C.gl})`, borderRadius:16, padding:"20px 22px", marginBottom:16 }}>
@@ -227,6 +440,11 @@ function DetailBanner({ title, subtitle, cashflow, lots }: { title: string; subt
 
 function BienSimpleCard({ bien, onClick }: { bien: BienSimple; onClick: () => void }) {
   const c = cf(bien); const loue = bien.statut === "loue"
+  const mode = bien.mode_exploitation
+  const statusLabel = mode === "airbnb" ? MODE_EXPL_LABELS["airbnb"]
+    : loue ? "Loué" : mode === "vacant" ? "Vacant" : "Vacant"
+  const statusBg    = mode === "airbnb" ? MODE_EXPL_BG["airbnb"]  : loue ? C.gp : C.rp
+  const statusColor = mode === "airbnb" ? MODE_EXPL_COLOR["airbnb"] : loue ? C.g : C.rd
   return (
     <div onClick={onClick}
       style={{ background:C.wh, borderRadius:14, padding:"18px 20px", marginBottom:12, boxShadow:"0 1px 10px rgba(45,91,61,.07)", border:`1.5px solid ${C.br}`, cursor:"pointer", transition:"all .18s" }}
@@ -242,7 +460,7 @@ function BienSimpleCard({ bien, onClick }: { bien: BienSimple; onClick: () => vo
           {bien.adresse && <div style={{ fontSize:12, color:C.tm, marginBottom:8 }}>📍 {bien.adresse}</div>}
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
             <Badge label={TYPE_LABELS[bien.type]} />
-            <Badge label={loue?"Loué":"Vacant"} bg={loue?C.gp:C.rp} color={loue?C.g:C.rd} />
+            <Badge label={statusLabel} bg={statusBg} color={statusColor} />
             <Badge label={MODE_DETENTION_LABELS[bien.mode_detention]} bg="#f0edf8" color="#6c3fc7" />
             <Badge label={REGIME_FISCAL_LABELS[bien.regime_fiscal]} bg={C.bp} color={C.bl} />
           </div>
@@ -259,6 +477,10 @@ function BienSimpleCard({ bien, onClick }: { bien: BienSimple; onClick: () => vo
 
 function LotRow({ lot, onClick }: { lot: Lot; onClick: () => void }) {
   const c = cf(lot); const loue = lot.statut === "loue"
+  const mode = lot.mode_exploitation
+  const statusLabel = mode === "airbnb" ? MODE_EXPL_LABELS["airbnb"] : loue ? "Loué" : "Vacant"
+  const statusBg    = mode === "airbnb" ? MODE_EXPL_BG["airbnb"]  : loue ? C.gp : C.rp
+  const statusColor = mode === "airbnb" ? MODE_EXPL_COLOR["airbnb"] : loue ? C.g : C.rd
   return (
     <div onClick={e => { e.stopPropagation(); onClick() }}
       style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 12px", borderRadius:8, background:C.cr, marginBottom:4, cursor:"pointer", transition:"background .12s" }}
@@ -271,7 +493,7 @@ function LotRow({ lot, onClick }: { lot: Lot; onClick: () => void }) {
           <div style={{ fontWeight:700, fontSize:13, color:C.tx }}>{lot.nom}</div>
           {loue && lot.locataire && <div style={{ fontSize:11, color:C.tm }}>👤 {lot.locataire}</div>}
         </div>
-        <Badge label={loue?"Loué":"Vacant"} bg={loue?C.gp:C.rp} color={loue?C.g:C.rd} />
+        <Badge label={statusLabel} bg={statusBg} color={statusColor} />
       </div>
       <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
         <div style={{ fontWeight:800, fontSize:14, color:c>=0?C.g:C.rd }}>{c>=0?"+":""}{euro(c)}</div>
@@ -449,8 +671,9 @@ function DocAssocies({ nomBien }: { nomBien: string }) {
   )
 }
 
-function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
+function BienSimpleDetail({ bien, onBack, onEdit, onDelete, onAddLocataire, onEditLocataire, onDeleteLocataire }: {
   bien: BienSimple; onBack: () => void; onEdit: () => void; onDelete: () => void
+  onAddLocataire: () => void; onEditLocataire: (l: Locataire) => void; onDeleteLocataire: (l: Locataire) => void
 }) {
   const [tab, setTab] = useState<"infos"|"recettes"|"depenses"|"documents">("infos")
   const c = cf(bien); const loue = bien.statut === "loue"
@@ -475,12 +698,13 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
       </div>
       {tab === "infos" && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
-            <SectionTitle>Locataire</SectionTitle>
-            {loue && bien.locataire
-              ? <><div style={{ fontWeight:800, fontSize:15, marginBottom:8 }}>👤 {bien.locataire}</div><Badge label="Bail en cours" /></>
-              : <div style={{ color:C.rd, fontWeight:700, fontSize:14 }}>🔴 Bien vacant</div>}
-          </div>
+          <LocataireSection
+            mode_exploitation={bien.mode_exploitation}
+            locataires={bien.locataires}
+            onAdd={onAddLocataire}
+            onEdit={onEditLocataire}
+            onDelete={onDeleteLocataire}
+          />
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
             <SectionTitle>Finances / mois</SectionTitle>
             <InfoRow label="Loyer HC"  value={euro(bien.loyer_hc)} />
@@ -491,6 +715,7 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}`, gridColumn:"1/-1" }}>
             <SectionTitle>Informations</SectionTitle>
             <InfoRow label="Type"                value={TYPE_LABELS[bien.type]} />
+            <InfoRow label="Mode d'exploitation" value={MODE_EXPL_LABELS[bien.mode_exploitation]} />
             <InfoRow label="Mode de détention"   value={MODE_DETENTION_LABELS[bien.mode_detention]} />
             <InfoRow label="Régime fiscal"        value={REGIME_FISCAL_LABELS[bien.regime_fiscal]} />
             <InfoRow label="Loyer annuel"         value={euro(bien.loyer_hc*12)} />
@@ -504,8 +729,9 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
   )
 }
 
-function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
+function LotDetail({ lot, immeuble, onBack, onEdit, onDelete, onAddLocataire, onEditLocataire, onDeleteLocataire }: {
   lot: Lot; immeuble: Immeuble; onBack: () => void; onEdit: () => void; onDelete: () => void
+  onAddLocataire: () => void; onEditLocataire: (l: Locataire) => void; onDeleteLocataire: (l: Locataire) => void
 }) {
   const [tab, setTab] = useState<"infos"|"recettes"|"depenses"|"documents">("infos")
   const c = cf(lot); const loue = lot.statut === "loue"
@@ -531,12 +757,13 @@ function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
       </div>
       {tab === "infos" && (
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
-            <SectionTitle>Locataire</SectionTitle>
-            {loue && lot.locataire
-              ? <><div style={{ fontWeight:800, fontSize:15, marginBottom:8 }}>👤 {lot.locataire}</div><Badge label="Bail en cours" /></>
-              : <div style={{ color:C.rd, fontWeight:700, fontSize:14 }}>🔴 Lot vacant</div>}
-          </div>
+          <LocataireSection
+            mode_exploitation={lot.mode_exploitation}
+            locataires={lot.locataires}
+            onAdd={onAddLocataire}
+            onEdit={onEditLocataire}
+            onDelete={onDeleteLocataire}
+          />
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
             <SectionTitle>Finances / mois</SectionTitle>
             <InfoRow label="Loyer HC"  value={euro(lot.loyer_hc)} />
@@ -548,6 +775,7 @@ function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
             <SectionTitle>Informations</SectionTitle>
             <InfoRow label="Immeuble"            value={immeuble.nom} />
             <InfoRow label="Type"                value={TYPE_LABELS[lot.type]} />
+            <InfoRow label="Mode d'exploitation" value={MODE_EXPL_LABELS[lot.mode_exploitation]} />
             <InfoRow label="Mode de détention"   value={MODE_DETENTION_LABELS[immeuble.mode_detention]} />
             <InfoRow label="Régime fiscal"        value={REGIME_FISCAL_LABELS[lot.regime_fiscal]} />
             <InfoRow label="Loyer annuel"         value={euro(lot.loyer_hc*12)} />
@@ -724,12 +952,13 @@ function AddImmeubleModal({ onClose, onSave, title = "Nouvel immeuble", initialV
 function AddLotModal({ immeuble, onClose, onSave, title, initialValues }: {
   immeuble: Immeuble; onClose: () => void; onSave: (f: any) => void
   title?: string
-  initialValues?: { nom: string; type: string; regime_fiscal: string }
+  initialValues?: { nom: string; type: string; regime_fiscal: string; mode_exploitation?: string }
 }) {
   const [f, setF] = useState({
     nom: initialValues?.nom ?? "",
     type: initialValues?.type ?? "appartement",
     regime_fiscal: initialValues?.regime_fiscal ?? immeuble.regime_fiscal,
+    mode_exploitation: initialValues?.mode_exploitation ?? "meuble",
   })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   const isEdit = !!initialValues
@@ -740,6 +969,15 @@ function AddLotModal({ immeuble, onClose, onSave, title, initialValues }: {
         <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
         <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
       </div>
+      <FieldSelect label="Mode d'exploitation" value={f.mode_exploitation} onChange={set("mode_exploitation")}>
+        <option value="nu">Location nue longue durée</option>
+        <option value="meuble">Location meublée longue durée</option>
+        <option value="airbnb">Location courte durée / Airbnb</option>
+        <option value="commercial">Local commercial</option>
+        <option value="mixte">Usage mixte</option>
+        <option value="vacant">Vacant</option>
+        <option value="autre">Autre</option>
+      </FieldSelect>
       <SaveBtn label={isEdit ? "Enregistrer les modifications" : "Ajouter le lot"} disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
@@ -763,6 +1001,8 @@ export default function BiensPage() {
   const [editBien, setEditBien]         = useState<BienSimple | null>(null)
   const [editImmeuble, setEditImmeuble] = useState<Immeuble | null>(null)
   const [editLot, setEditLot]           = useState<{ lot: Lot; immeubleId: string } | null>(null)
+  const [addLocataireFor, setAddLocataireFor]     = useState<{ id: string; type: "bien"|"lot"; immeubleId?: string } | null>(null)
+  const [editLocataireState, setEditLocataireState] = useState<{ loc: Locataire; id: string; type: "bien"|"lot"; immeubleId?: string } | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null))
@@ -772,21 +1012,26 @@ export default function BiensPage() {
   async function load() {
     setLoading(true)
     setDbError("")
-    const [bienRes, lotRes] = await Promise.all([
+    const [bienRes, lotRes, locRes] = await Promise.all([
       supabase.from("biens").select("*").order("created_at", { ascending: true }),
       supabase.from("lots").select("*"),
+      supabase.from("locataires").select("*"),
     ])
     setLoading(false)
     if (bienRes.error) { setDbError(bienRes.error.message); return }
     if (lotRes.error)  { setDbError(lotRes.error.message);  return }
+    if (locRes.error)  { setDbError(locRes.error.message);  return }
 
+    const allLocs = (locRes.data ?? []).map(rowToLocataire)
     const rows = bienRes.data ?? []
     const immRows  = rows.filter(r => parseMeta(r).kind === "immeuble")
     const simpRows = rows.filter(r => parseMeta(r).kind !== "immeuble")
 
-    const lots: Lot[] = (lotRes.data ?? []).map(r => rowToLot(r))
+    const lots: Lot[] = (lotRes.data ?? []).map(r =>
+      rowToLot(r, allLocs.filter(l => l.lot_id === r.id))
+    )
     const result: Bien[] = [
-      ...simpRows.map(r => rowToSimple(r)),
+      ...simpRows.map(r => rowToSimple(r, allLocs.filter(l => l.bien_id === r.id))),
       ...immRows.map(r => rowToImmeuble(r, lots.filter(l => l.immeuble_id === r.id))),
     ].sort((a, b) => a.nom.localeCompare(b.nom))
 
@@ -817,6 +1062,7 @@ export default function BiensPage() {
         annee_acquisition: f.anneeAcquisition || null,
         notes: JSON.stringify({
           mode_detention: f.mode_detention,
+          mode_exploitation: f.mode_exploitation,
           notes_text: f.notes || null,
         }),
       })
@@ -840,7 +1086,7 @@ export default function BiensPage() {
     setAddLotFor(null)
     const { data, error } = await supabase
       .from("lots")
-      .insert({ bien_id: immeubleId, nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal }) })
+      .insert({ bien_id: immeubleId, nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     const newLot = rowToLot(data)
@@ -858,6 +1104,7 @@ export default function BiensPage() {
       annee_acquisition: f.anneeAcquisition || null,
       notes: JSON.stringify({
         mode_detention: f.mode_detention,
+        mode_exploitation: f.mode_exploitation,
         notes_text: f.notes || null,
       }),
     }).eq("id", id)
@@ -869,6 +1116,7 @@ export default function BiensPage() {
             type: mapTypeBien(f.type),
             mode_detention: parseModeDetention(f.mode_detention),
             regime_fiscal: parseRegimeFiscal(f.regime_fiscal),
+            mode_exploitation: (f.mode_exploitation as ModeExploitation) ?? "autre",
             valeurAchat: f.valeurAchat, surface: f.surface,
             anneeAcquisition: f.anneeAcquisition, notes_text: f.notes }
         : b
@@ -910,7 +1158,7 @@ export default function BiensPage() {
 
   async function handleEditLot(immeubleId: string, lotId: string, f: any) {
     const { error } = await supabase.from("lots").update({
-      nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal }),
+      nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }),
     }).eq("id", lotId)
     if (error) { setDbError(error.message); return }
     setEditLot(null)
@@ -918,7 +1166,7 @@ export default function BiensPage() {
       b.kind === "immeuble" && b.id === immeubleId
         ? { ...b, lots: b.lots.map(l =>
             l.id === lotId
-              ? { ...l, nom: f.nom.trim(), type: f.type as TypeBien, regime_fiscal: parseRegimeFiscal(f.regime_fiscal) }
+              ? { ...l, nom: f.nom.trim(), type: f.type as TypeBien, regime_fiscal: parseRegimeFiscal(f.regime_fiscal), mode_exploitation: (f.mode_exploitation as ModeExploitation) ?? "autre" }
               : l
           )}
         : b
@@ -935,6 +1183,83 @@ export default function BiensPage() {
         : b
     ))
     setSelected({ kind: "immeuble", id: immeubleId })
+  }
+
+  function applyLocUpdate(id: string, type: "bien"|"lot", immeubleId: string|undefined, newLocs: Locataire[]) {
+    const active = activeLocataire(newLocs)
+    const patch = {
+      locataires: newLocs,
+      statut: (active ? "loue" : "vacant") as Statut,
+      locataire: active ? `${active.prenom} ${active.nom}`.trim() : undefined,
+      loyer_hc: active ? active.loyer : undefined,
+      charges:  active ? active.charges : undefined,
+    }
+    setBiens(prev => prev.map(b => {
+      if (type === "bien" && b.kind === "simple" && b.id === id)
+        return { ...b, ...patch, loyer_hc: active ? active.loyer : b.loyer_hc, charges: active ? active.charges : 0 }
+      if (type === "lot" && b.kind === "immeuble" && b.id === immeubleId)
+        return { ...b, lots: b.lots.map(l => l.id === id ? { ...l, ...patch, loyer_hc: active ? active.loyer : l.loyer_hc, charges: active ? active.charges : 0 } : l) }
+      return b
+    }))
+  }
+
+  async function handleAddLocataire(f: LocataireForm) {
+    if (!addLocataireFor) return
+    const { id, type, immeubleId } = addLocataireFor
+    setAddLocataireFor(null)
+    const { data, error } = await supabase.from("locataires").insert({
+      [type === "bien" ? "bien_id" : "lot_id"]: id,
+      nom: f.nom.trim(),
+      email: f.email.trim() || null,
+      tel: f.tel.trim() || null,
+      type_contrat: f.type_contrat,
+      statut: f.statut,
+      loyer: f.loyer ? Number(f.loyer) : null,
+      depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
+      date_entree: f.date_entree || null,
+      date_sortie: f.date_sortie || null,
+      notes: JSON.stringify({ prenom: f.prenom.trim() || null, charges: f.charges || null, notes_text: f.notes.trim() || null }),
+    }).select().single()
+    if (error) { setDbError(error.message); return }
+    const newLoc = rowToLocataire(data)
+    const curLocs = type === "bien"
+      ? (biens.find((b): b is BienSimple => b.kind === "simple" && b.id === id)?.locataires ?? [])
+      : (biens.find((b): b is Immeuble => b.kind === "immeuble" && b.id === immeubleId)?.lots.find(l => l.id === id)?.locataires ?? [])
+    applyLocUpdate(id, type, immeubleId, [...curLocs, newLoc])
+  }
+
+  async function handleEditLocataire(f: LocataireForm) {
+    if (!editLocataireState) return
+    const { loc, id, type, immeubleId } = editLocataireState
+    setEditLocataireState(null)
+    const { data, error } = await supabase.from("locataires").update({
+      nom: f.nom.trim(),
+      email: f.email.trim() || null,
+      tel: f.tel.trim() || null,
+      type_contrat: f.type_contrat,
+      statut: f.statut,
+      loyer: f.loyer ? Number(f.loyer) : null,
+      depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
+      date_entree: f.date_entree || null,
+      date_sortie: f.date_sortie || null,
+      notes: JSON.stringify({ prenom: f.prenom.trim() || null, charges: f.charges || null, notes_text: f.notes.trim() || null }),
+    }).eq("id", loc.id).select().single()
+    if (error) { setDbError(error.message); return }
+    const updatedLoc = rowToLocataire(data)
+    const curLocs = type === "bien"
+      ? (biens.find((b): b is BienSimple => b.kind === "simple" && b.id === id)?.locataires ?? [])
+      : (biens.find((b): b is Immeuble => b.kind === "immeuble" && b.id === immeubleId)?.lots.find(l => l.id === id)?.locataires ?? [])
+    applyLocUpdate(id, type, immeubleId, curLocs.map(l => l.id === loc.id ? updatedLoc : l))
+  }
+
+  async function handleDeleteLocataire(loc: Locataire, id: string, type: "bien"|"lot", immeubleId?: string) {
+    if (!window.confirm(`Supprimer ${loc.prenom} ${loc.nom} ?`)) return
+    const { error } = await supabase.from("locataires").delete().eq("id", loc.id)
+    if (error) { setDbError(error.message); return }
+    const curLocs = type === "bien"
+      ? (biens.find((b): b is BienSimple => b.kind === "simple" && b.id === id)?.locataires ?? [])
+      : (biens.find((b): b is Immeuble => b.kind === "immeuble" && b.id === immeubleId)?.lots.find(l => l.id === id)?.locataires ?? [])
+    applyLocUpdate(id, type, immeubleId, curLocs.filter(l => l.id !== loc.id))
   }
 
   const simples   = biens.filter((b): b is BienSimple => b.kind === "simple")
@@ -956,6 +1281,9 @@ export default function BiensPage() {
             onBack={() => setSelected(null)}
             onEdit={() => setEditBien(bien)}
             onDelete={() => handleDeleteSimple(bien.id)}
+            onAddLocataire={() => setAddLocataireFor({ id: bien.id, type: "bien" })}
+            onEditLocataire={loc => setEditLocataireState({ loc, id: bien.id, type: "bien" })}
+            onDeleteLocataire={loc => handleDeleteLocataire(loc, bien.id, "bien")}
           />
           {editBien && (
             <AddBienModal
@@ -963,6 +1291,7 @@ export default function BiensPage() {
               initialValues={{
                 nom: editBien.nom, adresse: editBien.adresse,
                 type: TYPE_BIEN_DISPLAY[editBien.type] ?? "Autre",
+                mode_exploitation: editBien.mode_exploitation,
                 mode_detention: editBien.mode_detention,
                 regime_fiscal: editBien.regime_fiscal,
                 valeurAchat: editBien.valeurAchat, surface: editBien.surface,
@@ -970,6 +1299,23 @@ export default function BiensPage() {
               }}
               onClose={() => setEditBien(null)}
               onSave={f => handleEditSimple(editBien.id, f)}
+            />
+          )}
+          {addLocataireFor && <AddLocataireModal onClose={() => setAddLocataireFor(null)} onSave={handleAddLocataire} />}
+          {editLocataireState && (
+            <AddLocataireModal
+              title="Modifier le locataire"
+              onClose={() => setEditLocataireState(null)}
+              onSave={handleEditLocataire}
+              initial={{
+                prenom: editLocataireState.loc.prenom, nom: editLocataireState.loc.nom,
+                email: editLocataireState.loc.email, tel: editLocataireState.loc.tel,
+                type_contrat: editLocataireState.loc.type_contrat, statut: editLocataireState.loc.statut,
+                loyer: String(editLocataireState.loc.loyer), charges: String(editLocataireState.loc.charges),
+                depot_garantie: String(editLocataireState.loc.depot_garantie),
+                date_entree: editLocataireState.loc.date_entree, date_sortie: editLocataireState.loc.date_sortie,
+                notes: editLocataireState.loc.notes_text,
+              }}
             />
           )}
         </>
@@ -1014,14 +1360,34 @@ export default function BiensPage() {
             onBack={() => setSelected({ kind:"immeuble", id:imm.id })}
             onEdit={() => setEditLot({ lot, immeubleId: imm.id })}
             onDelete={() => handleDeleteLot(imm.id, lot)}
+            onAddLocataire={() => setAddLocataireFor({ id: lot.id, type: "lot", immeubleId: imm.id })}
+            onEditLocataire={loc => setEditLocataireState({ loc, id: lot.id, type: "lot", immeubleId: imm.id })}
+            onDeleteLocataire={loc => handleDeleteLocataire(loc, lot.id, "lot", imm.id)}
           />
           {editLot && (
             <AddLotModal
               immeuble={imm}
               title={`Modifier · ${editLot.lot.nom}`}
-              initialValues={{ nom: editLot.lot.nom, type: editLot.lot.type, regime_fiscal: editLot.lot.regime_fiscal }}
+              initialValues={{ nom: editLot.lot.nom, type: editLot.lot.type, regime_fiscal: editLot.lot.regime_fiscal, mode_exploitation: editLot.lot.mode_exploitation }}
               onClose={() => setEditLot(null)}
               onSave={f => handleEditLot(editLot.immeubleId, editLot.lot.id, f)}
+            />
+          )}
+          {addLocataireFor && <AddLocataireModal onClose={() => setAddLocataireFor(null)} onSave={handleAddLocataire} />}
+          {editLocataireState && (
+            <AddLocataireModal
+              title="Modifier le locataire"
+              onClose={() => setEditLocataireState(null)}
+              onSave={handleEditLocataire}
+              initial={{
+                prenom: editLocataireState.loc.prenom, nom: editLocataireState.loc.nom,
+                email: editLocataireState.loc.email, tel: editLocataireState.loc.tel,
+                type_contrat: editLocataireState.loc.type_contrat, statut: editLocataireState.loc.statut,
+                loyer: String(editLocataireState.loc.loyer), charges: String(editLocataireState.loc.charges),
+                depot_garantie: String(editLocataireState.loc.depot_garantie),
+                date_entree: editLocataireState.loc.date_entree, date_sortie: editLocataireState.loc.date_sortie,
+                notes: editLocataireState.loc.notes_text,
+              }}
             />
           )}
         </>
