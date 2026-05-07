@@ -42,7 +42,7 @@ interface Recette {
   locataire?: string
   type: TypeRecette
   montant: number
-  date: string        // YYYY-MM-DD
+  date: string
   description?: string
 }
 
@@ -53,7 +53,7 @@ const TYPE_CONFIG: Record<TypeRecette, { label: string; bg: string; color: strin
   autre:           { label: "Autre revenu",    bg: C.cr2, color: C.tm },
 }
 
-// ── Références biens (pour le formulaire) ─────────────────
+// ── Références biens ───────────────────────────────────────
 const BIENS_REF = [
   { id: "b1", nom: "Appartement Gambetta" },
   { id: "b2", nom: "Studio Confluence"    },
@@ -63,36 +63,27 @@ const BIENS_REF = [
 
 // ── Données fictives ───────────────────────────────────────
 const MOCK_RECETTES: Recette[] = [
-  // ── Janvier 2026
   { id:"r01", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"loyer",   montant:850,  date:"2026-01-05", description:"Loyer janvier 2026" },
   { id:"r02", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"charges", montant:80,   date:"2026-01-05", description:"Charges janvier 2026" },
   { id:"r03", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"loyer",   montant:620,  date:"2026-01-03", description:"Loyer janvier 2026" },
   { id:"r04", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"charges", montant:50,   date:"2026-01-03", description:"Charges janvier 2026" },
   { id:"r05", bien_id:"b3", bien_nom:"Garage Bellecour",     locataire:"Marie Blanc",    type:"loyer",   montant:120,  date:"2026-01-07", description:"Loyer janvier 2026" },
-
-  // ── Février 2026
   { id:"r06", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"loyer",   montant:850,  date:"2026-02-05", description:"Loyer février 2026" },
   { id:"r07", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"charges", montant:80,   date:"2026-02-05", description:"Charges février 2026" },
   { id:"r08", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"loyer",   montant:620,  date:"2026-02-03", description:"Loyer février 2026" },
   { id:"r09", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"charges", montant:50,   date:"2026-02-03", description:"Charges février 2026" },
   { id:"r10", bien_id:"b3", bien_nom:"Garage Bellecour",     locataire:"Marie Blanc",    type:"loyer",   montant:120,  date:"2026-02-07", description:"Loyer février 2026" },
-
-  // ── Mars 2026
   { id:"r11", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"loyer",   montant:850,  date:"2026-03-05", description:"Loyer mars 2026" },
   { id:"r12", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"charges", montant:80,   date:"2026-03-05", description:"Charges mars 2026" },
   { id:"r13", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"loyer",   montant:620,  date:"2026-03-03", description:"Loyer mars 2026" },
   { id:"r14", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"charges", montant:50,   date:"2026-03-03", description:"Charges mars 2026" },
   { id:"r15", bien_id:"b3", bien_nom:"Garage Bellecour",     locataire:"Marie Blanc",    type:"loyer",   montant:120,  date:"2026-03-07", description:"Loyer mars 2026" },
   { id:"r16", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"autre",   montant:150,  date:"2026-03-18", description:"Remboursement sinistre assurance" },
-
-  // ── Avril 2026
   { id:"r17", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"loyer",   montant:850,  date:"2026-04-05", description:"Loyer avril 2026" },
   { id:"r18", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"charges", montant:80,   date:"2026-04-05", description:"Charges avril 2026" },
   { id:"r19", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"loyer",   montant:620,  date:"2026-04-03", description:"Loyer avril 2026" },
   { id:"r20", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"charges", montant:50,   date:"2026-04-03", description:"Charges avril 2026" },
   { id:"r21", bien_id:"b3", bien_nom:"Garage Bellecour",     locataire:"Marie Blanc",    type:"loyer",   montant:120,  date:"2026-04-07", description:"Loyer avril 2026" },
-
-  // ── Mai 2026
   { id:"r22", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"loyer",   montant:850,  date:"2026-05-05", description:"Loyer mai 2026" },
   { id:"r23", bien_id:"b1", bien_nom:"Appartement Gambetta", locataire:"Sophie Martin",  type:"charges", montant:80,   date:"2026-05-05", description:"Charges mai 2026" },
   { id:"r24", bien_id:"b2", bien_nom:"Studio Confluence",    locataire:"Thomas Durand",  type:"loyer",   montant:620,  date:"2026-05-03", description:"Loyer mai 2026" },
@@ -148,36 +139,47 @@ function FieldInput({ label, ...props }: React.InputHTMLAttributes<HTMLInputElem
 
 // ── Ligne de recette ───────────────────────────────────────
 
-function RecetteLigne({ r }: { r: Recette }) {
+function RecetteLigne({ r, onEdit, onDelete }: {
+  r: Recette
+  onEdit: () => void
+  onDelete: () => void
+}) {
   const cfg = TYPE_CONFIG[r.type]
   return (
-    <div
-      style={{
-        display:"flex", justifyContent:"space-between", alignItems:"flex-start",
-        padding:"11px 0", borderBottom:`1px solid ${C.br}`, gap:12,
-      }}
-    >
+    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"11px 0", borderBottom:`1px solid ${C.br}`, gap:12 }}>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:4 }}>
           <Badge label={cfg.label} bg={cfg.bg} color={cfg.color} />
           <span style={{ fontSize:12, color:C.tm }}>{r.bien_nom}</span>
-          {r.locataire && (
-            <span style={{ fontSize:11, color:C.tm }}>· 👤 {r.locataire}</span>
-          )}
+          {r.locataire && <span style={{ fontSize:11, color:C.tm }}>· 👤 {r.locataire}</span>}
         </div>
-        {r.description && (
-          <div style={{ fontSize:13, color:C.tx, fontWeight:500 }}>{r.description}</div>
-        )}
+        {r.description && <div style={{ fontSize:13, color:C.tx, fontWeight:500 }}>{r.description}</div>}
         <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>📅 {formatDate(r.date)}</div>
       </div>
-      <div style={{ fontWeight:800, fontSize:15, color:C.g, flexShrink:0, whiteSpace:"nowrap" }}>
-        +{euro(r.montant)}
+      <div style={{ textAlign:"right", flexShrink:0 }}>
+        <div style={{ fontWeight:800, fontSize:15, color:C.g, whiteSpace:"nowrap", marginBottom:6 }}>
+          +{euro(r.montant)}
+        </div>
+        <div style={{ display:"flex", gap:4, justifyContent:"flex-end" }}>
+          <button
+            onClick={onEdit}
+            style={{ background:"none", border:`1px solid ${C.br}`, borderRadius:7, padding:"3px 8px", fontSize:11, fontWeight:700, color:C.gl, cursor:"pointer", fontFamily:"inherit" }}
+          >
+            Modifier
+          </button>
+          <button
+            onClick={onDelete}
+            style={{ background:"none", border:`1px solid ${C.br}`, borderRadius:7, padding:"3px 8px", fontSize:11, fontWeight:700, color:C.rd, cursor:"pointer", fontFamily:"inherit" }}
+          >
+            Supprimer
+          </button>
+        </div>
       </div>
     </div>
   )
 }
 
-// ── Modal ajout d'une recette ──────────────────────────────
+// ── Modal recette (ajout + modification) ──────────────────
 
 interface FormState {
   bien_id: string
@@ -190,14 +192,23 @@ interface FormState {
 
 const today = new Date().toISOString().slice(0, 10)
 
-function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r: Recette) => void }) {
+function RecetteModal({
+  onClose,
+  onSave,
+  initialValues,
+}: {
+  onClose: () => void
+  onSave: (r: Recette) => void
+  initialValues?: Recette
+}) {
+  const isEdit = !!initialValues
   const [form, setForm] = useState<FormState>({
-    bien_id:     BIENS_REF[0].id,
-    type:        "loyer",
-    montant:     "",
-    date:        today,
-    description: "",
-    locataire:   "",
+    bien_id:     initialValues?.bien_id              ?? BIENS_REF[0].id,
+    type:        initialValues?.type                 ?? "loyer",
+    montant:     initialValues?.montant.toString()   ?? "",
+    date:        initialValues?.date                 ?? today,
+    description: initialValues?.description          ?? "",
+    locataire:   initialValues?.locataire            ?? "",
   })
 
   const set = (key: keyof FormState) => (v: string) =>
@@ -209,7 +220,7 @@ function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r:
   const handleSave = () => {
     if (!canSave) return
     onSave({
-      id:          Date.now().toString(),
+      id:          isEdit ? initialValues!.id : Date.now().toString(),
       bien_id:     form.bien_id,
       bien_nom:    bienNom,
       locataire:   form.locataire || undefined,
@@ -230,9 +241,10 @@ function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r:
         onClick={e => e.stopPropagation()}
         style={{ background:C.wh, borderRadius:"18px 18px 0 0", padding:"24px 20px 36px", width:"100%", maxWidth:540, maxHeight:"90vh", overflowY:"auto" }}
       >
-        {/* En-tête */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>Nouvelle recette</div>
+          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>
+            {isEdit ? "Modifier la recette" : "Nouvelle recette"}
+          </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:C.tm }}>✕</button>
         </div>
 
@@ -243,8 +255,10 @@ function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r:
               key={k}
               onClick={() => set("type")(k)}
               style={{
-                flex:1, padding:"8px 4px", borderRadius:9, border:`2px solid ${form.type === k ? v.color : C.br}`,
-                background: form.type === k ? v.bg : C.wh, color: form.type === k ? v.color : C.tm,
+                flex:1, padding:"8px 4px", borderRadius:9,
+                border:`2px solid ${form.type === k ? v.color : C.br}`,
+                background: form.type === k ? v.bg : C.wh,
+                color: form.type === k ? v.color : C.tm,
                 fontWeight:700, fontSize:11, cursor:"pointer", fontFamily:"inherit",
               }}
             >
@@ -306,10 +320,10 @@ function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r:
             color: canSave ? "#fff" : C.tm,
             border:"none", fontWeight:800, fontSize:15,
             cursor: canSave ? "pointer" : "not-allowed",
-            fontFamily:"inherit", transition:"background .15s",
+            fontFamily:"inherit",
           }}
         >
-          Enregistrer la recette
+          {isEdit ? "Enregistrer les modifications" : "Enregistrer la recette"}
         </button>
       </div>
     </div>
@@ -320,32 +334,27 @@ function AddRecetteModal({ onClose, onSave }: { onClose: () => void; onSave: (r:
 
 export default function RecettesPage() {
   const [recettes, setRecettes] = useState<Recette[]>(MOCK_RECETTES)
-  const [filterBien, setFilterBien] = useState("")
+  const [filterBien,  setFilterBien]  = useState("")
   const [filterAnnee, setFilterAnnee] = useState(2026)
-  const [filterMois, setFilterMois] = useState(0)    // 0 = tous
-  const [showAdd, setShowAdd] = useState(false)
+  const [filterMois,  setFilterMois]  = useState(0)
+  const [showAdd,   setShowAdd]   = useState(false)
+  const [editItem,  setEditItem]  = useState<Recette | null>(null)
 
-  // ── Filtrage ───────────────────────────────────────────
   const filtered = useMemo(() => {
     return recettes.filter(r => {
       const [y, m] = r.date.split("-")
-      if (parseInt(y) !== filterAnnee)       return false
+      if (parseInt(y) !== filterAnnee)              return false
       if (filterMois && parseInt(m) !== filterMois) return false
       if (filterBien && r.bien_id !== filterBien)   return false
       return true
     })
   }, [recettes, filterBien, filterAnnee, filterMois])
 
-  // ── Totaux ─────────────────────────────────────────────
   const totalPeriode = filtered.reduce((s, r) => s + r.montant, 0)
   const totalLoyers  = filtered.filter(r => r.type === "loyer").reduce((s, r) => s + r.montant, 0)
-  const nbMoisActifs = useMemo(() => {
-    const mois = new Set(filtered.map(r => r.date.slice(0, 7)))
-    return mois.size
-  }, [filtered])
+  const nbMoisActifs = useMemo(() => new Set(filtered.map(r => r.date.slice(0, 7))).size, [filtered])
   const moyMensuelle = nbMoisActifs > 0 ? totalPeriode / nbMoisActifs : 0
 
-  // ── Groupement par mois ────────────────────────────────
   const grouped = useMemo(() => {
     const groups: Record<string, Recette[]> = {}
     filtered.forEach(r => {
@@ -366,9 +375,27 @@ export default function RecettesPage() {
       })
   }, [filtered])
 
+  function handleDelete(id: string) {
+    if (window.confirm("Supprimer cette recette ?")) {
+      setRecettes(prev => prev.filter(r => r.id !== id))
+    }
+  }
+
+  function handleSaveAdd(r: Recette) {
+    setRecettes(prev => [r, ...prev])
+    const annee = parseInt(r.date.split("-")[0])
+    if (annee !== filterAnnee) setFilterAnnee(annee)
+    setFilterMois(0)
+    if (filterBien && filterBien !== r.bien_id) setFilterBien("")
+  }
+
+  function handleSaveEdit(updated: Recette) {
+    setRecettes(prev => prev.map(r => r.id === updated.id ? updated : r))
+  }
+
   return (
     <>
-      {/* ── En-tête ─────────────────────────────────────── */}
+      {/* En-tête */}
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:18 }}>
         <div>
           <h1 style={{ fontSize:22, fontWeight:900, color:C.tx, margin:0, lineHeight:1.2 }}>Recettes</h1>
@@ -384,36 +411,28 @@ export default function RecettesPage() {
         </button>
       </div>
 
-      {/* ── Filtres ──────────────────────────────────────── */}
-      <div
-        style={{
-          background:C.wh, borderRadius:12, padding:"14px 16px",
-          border:`1px solid ${C.br}`, marginBottom:16,
-          display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12,
-        }}
-      >
+      {/* Filtres */}
+      <div style={{ background:C.wh, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:16, display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
         <FieldSelect label="Bien" value={filterBien} onChange={setFilterBien}>
           <option value="">Tous les biens</option>
           {BIENS_REF.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
         </FieldSelect>
-
         <FieldSelect label="Année" value={filterAnnee.toString()} onChange={v => setFilterAnnee(parseInt(v))}>
           {ANNEES_DISPO.map(a => <option key={a} value={a}>{a}</option>)}
         </FieldSelect>
-
         <FieldSelect label="Mois" value={filterMois.toString()} onChange={v => setFilterMois(parseInt(v))}>
           <option value="0">Tous les mois</option>
           {MOIS_FR.map((m, i) => <option key={i + 1} value={i + 1}>{m}</option>)}
         </FieldSelect>
       </div>
 
-      {/* ── Barre de stats ───────────────────────────────── */}
+      {/* Stats */}
       <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, marginBottom:20 }}>
         {[
-          { label: filterMois ? "Total du mois" : "Total annuel", value: euro(totalPeriode), color: C.g   },
-          { label: "Dont loyers",    value: euro(totalLoyers),   color: C.g   },
+          { label: filterMois ? "Total du mois" : "Total annuel", value: euro(totalPeriode), color: C.g  },
+          { label: "Dont loyers",    value: euro(totalLoyers),          color: C.g  },
           { label: "Nb opérations",  value: filtered.length.toString(), color: C.tx },
-          { label: "Moy. mensuelle", value: euro(moyMensuelle),  color: C.gd  },
+          { label: "Moy. mensuelle", value: euro(moyMensuelle),         color: C.gd },
         ].map(s => (
           <div key={s.label} style={{ background:C.wh, borderRadius:12, padding:"14px 12px", border:`1px solid ${C.br}`, textAlign:"center" }}>
             <div style={{ fontSize:15, fontWeight:900, color:s.color, lineHeight:1.2 }}>{s.value}</div>
@@ -422,15 +441,9 @@ export default function RecettesPage() {
         ))}
       </div>
 
-      {/* ── Répartition par type ─────────────────────────── */}
+      {/* Répartition par type */}
       {filtered.length > 0 && (
-        <div
-          style={{
-            background:C.wh, borderRadius:12, padding:"14px 16px",
-            border:`1px solid ${C.br}`, marginBottom:16,
-            display:"flex", gap:8, flexWrap:"wrap",
-          }}
-        >
+        <div style={{ background:C.wh, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:16, display:"flex", gap:8, flexWrap:"wrap" }}>
           {(Object.entries(TYPE_CONFIG) as [TypeRecette, typeof TYPE_CONFIG[TypeRecette]][]).map(([k, v]) => {
             const montant = filtered.filter(r => r.type === k).reduce((s, r) => s + r.montant, 0)
             if (!montant) return null
@@ -444,53 +457,49 @@ export default function RecettesPage() {
         </div>
       )}
 
-      {/* ── Liste groupée par mois ───────────────────────── */}
+      {/* Liste groupée par mois */}
       {grouped.length === 0 ? (
         <div style={{ background:C.wh, borderRadius:14, padding:"56px 20px", textAlign:"center", border:`1px solid ${C.br}` }}>
           <div style={{ fontSize:40, marginBottom:12 }}>💰</div>
           <div style={{ fontWeight:700, fontSize:15, color:C.tx, marginBottom:6 }}>Aucune recette</div>
           <div style={{ color:C.tm, fontSize:13, marginBottom:20 }}>Modifiez les filtres ou ajoutez une recette.</div>
-          <button
-            onClick={() => setShowAdd(true)}
-            style={{ background:C.g, color:"#fff", border:"none", borderRadius:10, padding:"11px 22px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}
-          >
+          <button onClick={() => setShowAdd(true)} style={{ background:C.g, color:"#fff", border:"none", borderRadius:10, padding:"11px 22px", fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit" }}>
             + Ajouter une recette
           </button>
         </div>
       ) : (
         grouped.map(group => (
           <div key={group.key} style={{ marginBottom:20 }}>
-            {/* En-tête de mois */}
-            <div
-              style={{
-                display:"flex", justifyContent:"space-between", alignItems:"center",
-                padding:"8px 0", borderBottom:`2px solid ${C.g}`, marginBottom:2,
-              }}
-            >
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 0", borderBottom:`2px solid ${C.g}`, marginBottom:2 }}>
               <span style={{ fontWeight:800, fontSize:15, color:C.g }}>{group.label}</span>
               <span style={{ fontWeight:800, fontSize:15, color:C.g }}>+{euro(group.total)}</span>
             </div>
-
-            {/* Lignes du mois */}
             <div style={{ background:C.wh, borderRadius:12, padding:"0 16px", border:`1px solid ${C.br}` }}>
-              {group.items.map(r => <RecetteLigne key={r.id} r={r} />)}
+              {group.items.map(r => (
+                <RecetteLigne
+                  key={r.id}
+                  r={r}
+                  onEdit={() => setEditItem(r)}
+                  onDelete={() => handleDelete(r.id)}
+                />
+              ))}
             </div>
           </div>
         ))
       )}
 
-      {/* ── Modal ────────────────────────────────────────── */}
+      {/* Modals */}
       {showAdd && (
-        <AddRecetteModal
+        <RecetteModal
           onClose={() => setShowAdd(false)}
-          onSave={r => {
-            setRecettes(prev => [r, ...prev])
-            // Ajuster les filtres pour voir la nouvelle recette
-            const annee = parseInt(r.date.split("-")[0])
-            if (annee !== filterAnnee) setFilterAnnee(annee)
-            setFilterMois(0)
-            if (filterBien && filterBien !== r.bien_id) setFilterBien("")
-          }}
+          onSave={r => { handleSaveAdd(r); setShowAdd(false) }}
+        />
+      )}
+      {editItem && (
+        <RecetteModal
+          initialValues={editItem}
+          onClose={() => setEditItem(null)}
+          onSave={updated => { handleSaveEdit(updated); setEditItem(null) }}
         />
       )}
     </>
