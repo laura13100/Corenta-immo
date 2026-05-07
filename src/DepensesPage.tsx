@@ -1,4 +1,5 @@
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
+import { supabase } from "./supabase"
 
 // ── Palette ────────────────────────────────────────────────
 const C = {
@@ -73,82 +74,55 @@ const CAT_GROUPS: CatGroup[] = [
 
 const DEFAULT_CAT: CategorieDep = "gestion"
 
-// ── Biens de référence ─────────────────────────────────────
-const BIENS_REF = [
-  { id:"b1", nom:"Appartement Gambetta" },
-  { id:"b2", nom:"Studio Confluence"    },
-  { id:"b3", nom:"Garage Bellecour"     },
-  { id:"b4", nom:"T2 Croix-Rousse"     },
-]
+// ── Types Supabase ─────────────────────────────────────────
 
-// ── Données de démonstration ───────────────────────────────
-interface Depense {
-  id: string; bien_id: string; bien_nom: string
-  categorie: CategorieDep; montant: number; date: string
-  description?: string; deductible: boolean
+interface BienOption {
+  value:      string       // "bien_id" ou "bien_id|lot_id"
+  bien_id:    string
+  lot_id:     string | null
+  nom:        string
+  isImmeuble: boolean
 }
 
-const MOCK_DEPENSES: Depense[] = [
-  // Appartement Gambetta
-  { id:"d01",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"interets_emprunt",  montant:420,  date:"2026-01-01", description:"Intérêts crédit — jan.",          deductible:true  },
-  { id:"d01b", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"amortissement",      montant:300,  date:"2026-01-01", description:"Capital remboursé — jan.",         deductible:false },
-  { id:"d02",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"copropriete",        montant:180,  date:"2026-01-10", description:"Charges copropriété T1 2026",      deductible:true  },
-  { id:"d03",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"gestion",            montant:85,   date:"2026-01-05", description:"Honoraires agence — jan.",         deductible:true  },
-  { id:"d07",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"interets_emprunt",  montant:420,  date:"2026-02-01", description:"Intérêts crédit — fév.",          deductible:true  },
-  { id:"d07b", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"amortissement",      montant:300,  date:"2026-02-01", description:"Capital remboursé — fév.",         deductible:false },
-  { id:"d08",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"gestion",            montant:85,   date:"2026-02-05", description:"Honoraires agence — fév.",        deductible:true  },
-  { id:"d13",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"interets_emprunt",  montant:420,  date:"2026-03-01", description:"Intérêts crédit — mar.",          deductible:true  },
-  { id:"d13b", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"amortissement",      montant:300,  date:"2026-03-01", description:"Capital remboursé — mar.",         deductible:false },
-  { id:"d14",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"gestion",            montant:85,   date:"2026-03-05", description:"Honoraires agence — mar.",        deductible:true  },
-  { id:"d15",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"assurance_pno",      montant:42,   date:"2026-03-15", description:"Assurance PNO — mar.",            deductible:true  },
-  { id:"d21",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"interets_emprunt",  montant:420,  date:"2026-04-01", description:"Intérêts crédit — avr.",          deductible:true  },
-  { id:"d21b", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"amortissement",      montant:300,  date:"2026-04-01", description:"Capital remboursé — avr.",         deductible:false },
-  { id:"d22",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"gestion",            montant:85,   date:"2026-04-05", description:"Honoraires agence — avr.",        deductible:true  },
-  { id:"d23",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"copropriete",        montant:180,  date:"2026-04-10", description:"Charges copropriété T2 2026",      deductible:true  },
-  { id:"d24",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"taxe_fonciere",      montant:1240, date:"2026-04-15", description:"Taxe foncière 2026 (acompte)",     deductible:true  },
-  { id:"d30",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"interets_emprunt",  montant:420,  date:"2026-05-01", description:"Intérêts crédit — mai",           deductible:true  },
-  { id:"d30b", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"amortissement",      montant:300,  date:"2026-05-01", description:"Capital remboursé — mai",          deductible:false },
-  { id:"d31",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"gestion",            montant:85,   date:"2026-05-05", description:"Honoraires agence — mai",         deductible:true  },
-  { id:"d32",  bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"assurance_pno",      montant:42,   date:"2026-05-15", description:"Assurance PNO — mai",             deductible:true  },
+interface ImmeubleGroup {
+  id:   string
+  nom:  string
+  lots: { value: string; nom: string }[]
+}
 
-  // Studio Confluence
-  { id:"d04",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"interets_emprunt",  montant:310,  date:"2026-01-01", description:"Intérêts crédit — jan.",          deductible:true  },
-  { id:"d04b", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"amortissement",      montant:230,  date:"2026-01-01", description:"Capital remboursé — jan.",         deductible:false },
-  { id:"d05",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"copropriete",        montant:95,   date:"2026-01-10", description:"Charges copropriété T1 2026",      deductible:true  },
-  { id:"d09",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"interets_emprunt",  montant:310,  date:"2026-02-01", description:"Intérêts crédit — fév.",          deductible:true  },
-  { id:"d09b", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"amortissement",      montant:230,  date:"2026-02-01", description:"Capital remboursé — fév.",         deductible:false },
-  { id:"d16",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"interets_emprunt",  montant:310,  date:"2026-03-01", description:"Intérêts crédit — mar.",          deductible:true  },
-  { id:"d16b", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"amortissement",      montant:230,  date:"2026-03-01", description:"Capital remboursé — mar.",         deductible:false },
-  { id:"d17",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"copropriete",        montant:95,   date:"2026-03-10", description:"Charges copropriété T2 2026",      deductible:true  },
-  { id:"d25",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"interets_emprunt",  montant:310,  date:"2026-04-01", description:"Intérêts crédit — avr.",          deductible:true  },
-  { id:"d25b", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"amortissement",      montant:230,  date:"2026-04-01", description:"Capital remboursé — avr.",         deductible:false },
-  { id:"d26",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"taxe_fonciere",      montant:680,  date:"2026-04-15", description:"Taxe foncière 2026 (acompte)",     deductible:true  },
-  { id:"d33",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"interets_emprunt",  montant:310,  date:"2026-05-01", description:"Intérêts crédit — mai",           deductible:true  },
-  { id:"d33b", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"amortissement",      montant:230,  date:"2026-05-01", description:"Capital remboursé — mai",          deductible:false },
-  { id:"d34",  bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"copropriete",        montant:95,   date:"2026-05-10", description:"Régularisation charges copro",     deductible:true  },
+interface Depense {
+  id:          string
+  user_id:     string
+  bien_id:     string
+  bien_nom:    string
+  lot_id:      string | null
+  lot_nom:     string | null
+  categorie:   CategorieDep
+  montant:     number
+  date:        string
+  description?: string
+  deductible:  boolean
+  recuperable: boolean
+  payee:       boolean
+}
 
-  // Garage Bellecour
-  { id:"d06",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance_pno",      montant:12,   date:"2026-01-15", description:"Assurance garage — jan.",         deductible:true  },
-  { id:"d10",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance_pno",      montant:12,   date:"2026-02-15", description:"Assurance garage — fév.",        deductible:true  },
-  { id:"d18",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance_pno",      montant:12,   date:"2026-03-15", description:"Assurance garage — mar.",         deductible:true  },
-  { id:"d27",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance_pno",      montant:12,   date:"2026-04-15", description:"Assurance garage — avr.",         deductible:true  },
-  { id:"d28",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"taxe_fonciere",      montant:210,  date:"2026-04-15", description:"Taxe foncière 2026 (acompte)",     deductible:true  },
-  { id:"d35",  bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance_pno",      montant:12,   date:"2026-05-15", description:"Assurance garage — mai",          deductible:true  },
+interface FormState {
+  target:      string
+  categorie:   CategorieDep
+  montant:     string
+  date:        string
+  description: string
+  deductible:  boolean
+  recuperable: boolean
+  payee:       boolean
+}
 
-  // T2 Croix-Rousse
-  { id:"d11",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"petits_travaux",     montant:1200, date:"2026-02-20", description:"Remplacement chauffe-eau",         deductible:true  },
-  { id:"d12",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"assurance_pno",      montant:38,   date:"2026-02-15", description:"Assurance PNO — fév.",            deductible:true  },
-  { id:"d19",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"petits_travaux",     montant:450,  date:"2026-03-08", description:"Peinture salon et chambre",        deductible:true  },
-  { id:"d20",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"assurance_pno",      montant:38,   date:"2026-03-15", description:"Assurance PNO — mar.",            deductible:true  },
-  { id:"d29",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"assurance_pno",      montant:38,   date:"2026-04-15", description:"Assurance PNO — avr.",            deductible:true  },
-  { id:"d36",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"autre",              montant:95,   date:"2026-05-20", description:"Frais diagnostics DPE",            deductible:true  },
-  { id:"d37",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"assurance_pno",      montant:38,   date:"2026-05-15", description:"Assurance PNO — mai",             deductible:true  },
-  { id:"d38",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"comptabilite",       montant:120,  date:"2026-01-20", description:"Honoraires comptable T1",          deductible:true  },
-  { id:"d39",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"abonnement_elec",    montant:45,   date:"2026-02-10", description:"Facture EDF — fév.",              deductible:true  },
-  { id:"d40",  bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"abonnement_elec",    montant:45,   date:"2026-03-10", description:"Facture EDF — mar.",              deductible:true  },
-]
+const today = new Date().toISOString().slice(0, 10)
 
-const ANNEES_DISPO = [2026, 2025]
+function resolveTarget(target: string, opts: BienOption[]) {
+  const opt = opts.find(o => o.value === target)
+  return { bien_id: opt?.bien_id ?? "", lot_id: opt?.lot_id ?? null }
+}
 
 // ── Primitives UI ──────────────────────────────────────────
 
@@ -193,19 +167,50 @@ function FieldInput({ label, ...props }: React.InputHTMLAttributes<HTMLInputElem
   )
 }
 
+// ── Sélecteur bien/lot avec optgroups ──────────────────────
+
+function BienSelect({ value, onChange, bienOptions, immeubleGroups, style }: {
+  value: string
+  onChange: (v: string) => void
+  bienOptions: BienOption[]
+  immeubleGroups: ImmeubleGroup[]
+  style?: React.CSSProperties
+}) {
+  const immeubleIds = new Set(immeubleGroups.map(g => g.id))
+  const simples = bienOptions.filter(o => !o.lot_id && !immeubleIds.has(o.bien_id))
+  return (
+    <select
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none", boxSizing:"border-box", ...style }}
+    >
+      {simples.map(o => <option key={o.value} value={o.value}>{o.nom}</option>)}
+      {immeubleGroups.map(g => (
+        <optgroup key={g.id} label={`🏢 ${g.nom}`}>
+          <option value={g.id}>{g.nom} (niveau immeuble)</option>
+          {g.lots.map(l => <option key={l.value} value={l.value}>└ {l.nom}</option>)}
+        </optgroup>
+      ))}
+    </select>
+  )
+}
+
 // ── Ligne de dépense ───────────────────────────────────────
 
 function DepenseLigne({ d, onEdit, onDelete }: { d: Depense; onEdit: () => void; onDelete: () => void }) {
   const cfg = CAT_CONFIG[d.categorie]
+  const lieu = d.lot_nom ? `${d.bien_nom} / ${d.lot_nom}` : d.bien_nom
   return (
     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"10px 0", borderBottom:`1px solid ${C.br}`, gap:12 }}>
       <div style={{ flex:1, minWidth:0 }}>
         <div style={{ display:"flex", gap:6, alignItems:"center", flexWrap:"wrap", marginBottom:3 }}>
           <span style={{ fontSize:13 }}>{cfg.emoji}</span>
           <span style={{ fontSize:13, fontWeight:600, color:C.tx }}>{d.description || cfg.label}</span>
-          {!d.deductible && <Badge label="Non déductible" bg={C.rp} color={C.rd} />}
+          {!d.deductible  && <Badge label="Non déductible" bg={C.rp} color={C.rd} />}
+          {d.recuperable  && <Badge label="Récupérable" bg={C.gp} color={C.g} />}
+          {!d.payee       && <Badge label="Non payée" bg={C.dp} color={C.gd} />}
         </div>
-        <div style={{ fontSize:11, color:C.tm }}>📅 {formatDate(d.date)} · {d.bien_nom}</div>
+        <div style={{ fontSize:11, color:C.tm }}>📅 {formatDate(d.date)} · {lieu}</div>
       </div>
       <div style={{ textAlign:"right", flexShrink:0 }}>
         <div style={{ fontWeight:800, fontSize:15, color:d.deductible ? C.rd : C.tm, whiteSpace:"nowrap", marginBottom:6 }}>
@@ -230,58 +235,64 @@ function DepenseLigne({ d, onEdit, onDelete }: { d: Depense; onEdit: () => void;
   )
 }
 
-// ── Modal dépense ──────────────────────────────────────────
+// ── Toggle booléen ─────────────────────────────────────────
 
-interface FormState {
-  bien_id:     string
-  categorie:   CategorieDep
-  montant:     string
-  date:        string
-  description: string
-  deductible:  boolean
+function Toggle({ value, onChange, labelOn, labelOff, descOn, descOff, colorOn = C.g, bgOn = C.gp, colorOff = C.tm, bgOff = C.cr2 }: {
+  value: boolean; onChange: (v: boolean) => void
+  labelOn: string; labelOff: string; descOn?: string; descOff?: string
+  colorOn?: string; bgOn?: string; colorOff?: string; bgOff?: string
+}) {
+  return (
+    <div
+      onClick={() => onChange(!value)}
+      style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderRadius:10, background: value ? bgOn : bgOff, cursor:"pointer", marginBottom:12 }}
+    >
+      <div style={{ width:20, height:20, borderRadius:6, background: value ? colorOn : colorOff, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
+        {value && <span style={{ color:"#fff", fontSize:13, fontWeight:900 }}>✓</span>}
+      </div>
+      <div>
+        <div style={{ fontSize:13, fontWeight:700, color: value ? colorOn : colorOff }}>
+          {value ? labelOn : labelOff}
+        </div>
+        {(value ? descOn : descOff) && (
+          <div style={{ fontSize:11, color:C.tm }}>{value ? descOn : descOff}</div>
+        )}
+      </div>
+    </div>
+  )
 }
 
-const today = new Date().toISOString().slice(0, 10)
+// ── Modal dépense ──────────────────────────────────────────
 
-function DepenseModal({ onClose, onSave, initialValues }: {
+function DepenseModal({ onClose, onSave, initialValues, bienOptions, immeubleGroups }: {
   onClose: () => void
-  onSave: (d: Depense) => void
+  onSave: (form: FormState) => void
   initialValues?: Depense
+  bienOptions: BienOption[]
+  immeubleGroups: ImmeubleGroup[]
 }) {
   const isEdit = !!initialValues
+  const defaultTarget = bienOptions[0]?.value ?? ""
   const [form, setForm] = useState<FormState>({
-    bien_id:     initialValues?.bien_id            ?? BIENS_REF[0].id,
-    categorie:   initialValues?.categorie          ?? DEFAULT_CAT,
+    target:      initialValues
+      ? (initialValues.lot_id ? `${initialValues.bien_id}|${initialValues.lot_id}` : initialValues.bien_id)
+      : defaultTarget,
+    categorie:   initialValues?.categorie  ?? DEFAULT_CAT,
     montant:     initialValues?.montant.toString() ?? "",
-    date:        initialValues?.date               ?? today,
-    description: initialValues?.description        ?? "",
-    deductible:  initialValues?.deductible         ?? true,
+    date:        initialValues?.date       ?? today,
+    description: initialValues?.description ?? "",
+    deductible:  initialValues?.deductible ?? true,
+    recuperable: initialValues?.recuperable ?? false,
+    payee:       initialValues?.payee      ?? true,
   })
 
-  const setField = (key: keyof FormState) => (v: string | boolean) =>
+  const set = (key: keyof FormState) => (v: string | boolean) =>
     setForm(f => ({ ...f, [key]: v }))
 
-  const handleCatChange = (cat: CategorieDep) => {
+  const handleCatChange = (cat: CategorieDep) =>
     setForm(f => ({ ...f, categorie: cat, deductible: CAT_CONFIG[cat].ded }))
-  }
 
-  const bienNom = BIENS_REF.find(b => b.id === form.bien_id)?.nom ?? ""
-  const canSave = !!form.montant && parseFloat(form.montant) > 0 && !!form.date
-
-  const handleSave = () => {
-    if (!canSave) return
-    onSave({
-      id:          isEdit ? initialValues!.id : Date.now().toString(),
-      bien_id:     form.bien_id,
-      bien_nom:    bienNom,
-      categorie:   form.categorie,
-      montant:     parseFloat(form.montant),
-      date:        form.date,
-      description: form.description || undefined,
-      deductible:  form.deductible,
-    })
-    onClose()
-  }
+  const canSave = !!form.montant && parseFloat(form.montant) > 0 && !!form.date && !!form.target
 
   const cfg = CAT_CONFIG[form.categorie]
 
@@ -301,12 +312,11 @@ function DepenseModal({ onClose, onSave, initialValues }: {
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:C.tm }}>✕</button>
         </div>
 
-        {/* Catégorie — select avec groupes */}
+        {/* Catégorie */}
         <div style={{ marginBottom:14 }}>
           <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:6 }}>
             Catégorie
           </label>
-          {/* Aperçu catégorie sélectionnée */}
           <div style={{ display:"flex", alignItems:"center", gap:8, padding:"8px 12px", borderRadius:9, background:cfg.bg, marginBottom:8 }}>
             <span style={{ fontSize:18 }}>{cfg.emoji}</span>
             <span style={{ fontSize:13, fontWeight:700, color:cfg.color }}>{cfg.label}</span>
@@ -326,18 +336,23 @@ function DepenseModal({ onClose, onSave, initialValues }: {
           </select>
         </div>
 
-        {/* Bien */}
+        {/* Bien / lot */}
         <div style={{ marginBottom:12 }}>
           <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>
             Bien concerné
           </label>
-          <select
-            value={form.bien_id}
-            onChange={e => setField("bien_id")(e.target.value)}
-            style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none", boxSizing:"border-box" }}
-          >
-            {BIENS_REF.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
-          </select>
+          {bienOptions.length === 0 ? (
+            <div style={{ padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:13, color:C.tm, background:C.cr }}>
+              Aucun bien — ajoutez d'abord un bien dans la page Biens.
+            </div>
+          ) : (
+            <BienSelect
+              value={form.target}
+              onChange={v => set("target")(v)}
+              bienOptions={bienOptions}
+              immeubleGroups={immeubleGroups}
+            />
+          )}
         </div>
 
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
@@ -345,13 +360,13 @@ function DepenseModal({ onClose, onSave, initialValues }: {
             label="Montant (€) *"
             type="number" min="0" step="0.01" placeholder="0.00"
             value={form.montant}
-            onChange={e => setField("montant")(e.target.value)}
+            onChange={e => set("montant")(e.target.value)}
           />
           <FieldInput
             label="Date *"
             type="date"
             value={form.date}
-            onChange={e => setField("date")(e.target.value)}
+            onChange={e => set("date")(e.target.value)}
           />
         </div>
 
@@ -359,29 +374,41 @@ function DepenseModal({ onClose, onSave, initialValues }: {
           label="Description"
           placeholder="Ex. Charges copro T2 2026"
           value={form.description}
-          onChange={e => setField("description")(e.target.value)}
+          onChange={e => set("description")(e.target.value)}
         />
 
-        {/* Déductible */}
-        <div
-          onClick={() => setField("deductible")(!form.deductible)}
-          style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", borderRadius:10, background: form.deductible ? C.gp : C.rp, cursor:"pointer", marginBottom:16 }}
-        >
-          <div style={{ width:20, height:20, borderRadius:6, background: form.deductible ? C.g : C.rd, display:"flex", alignItems:"center", justifyContent:"center", flexShrink:0 }}>
-            {form.deductible && <span style={{ color:"#fff", fontSize:13, fontWeight:900 }}>✓</span>}
-          </div>
-          <div>
-            <div style={{ fontSize:13, fontWeight:700, color: form.deductible ? C.g : C.rd }}>
-              {form.deductible ? "Déductible fiscalement" : "Non déductible"}
-            </div>
-            <div style={{ fontSize:11, color:C.tm }}>
-              {form.deductible ? "Comptabilisée dans le bilan fiscal" : "Ex. remboursement capital emprunt"}
-            </div>
-          </div>
-        </div>
+        <Toggle
+          value={form.deductible}
+          onChange={v => set("deductible")(v)}
+          labelOn="Déductible fiscalement"
+          labelOff="Non déductible"
+          descOn="Comptabilisée dans le bilan fiscal"
+          descOff="Ex. remboursement capital emprunt"
+          colorOn={C.g} bgOn={C.gp} colorOff={C.rd} bgOff={C.rp}
+        />
+
+        <Toggle
+          value={form.recuperable}
+          onChange={v => set("recuperable")(v)}
+          labelOn="Récupérable sur le locataire"
+          labelOff="Non récupérable"
+          descOn="Ex. charges de copropriété refacturables"
+          colorOn={C.bl} bgOn={C.bp}
+        />
+
+        <Toggle
+          value={form.payee}
+          onChange={v => set("payee")(v)}
+          labelOn="Payée"
+          labelOff="Non encore payée"
+          descOn="La dépense a été réglée"
+          descOff="En attente de paiement"
+          colorOn={C.g} bgOn={C.gp} colorOff={C.gd} bgOff={C.dp}
+        />
 
         <button
-          onClick={handleSave}
+          onClick={() => { if (canSave) onSave(form) }}
+          disabled={!canSave}
           style={{ width:"100%", padding:"13px 0", borderRadius:10, background: canSave ? C.rd : C.cr2, color: canSave ? "#fff" : C.tm, border:"none", fontWeight:800, fontSize:15, cursor: canSave ? "pointer" : "not-allowed", fontFamily:"inherit" }}
         >
           {isEdit ? "Enregistrer les modifications" : "Enregistrer la dépense"}
@@ -394,34 +421,117 @@ function DepenseModal({ onClose, onSave, initialValues }: {
 // ── Page principale ────────────────────────────────────────
 
 export default function DepensesPage() {
-  const [depenses, setDepenses] = useState<Depense[]>(MOCK_DEPENSES)
-  const [filterBien,   setFilterBien]   = useState("")
-  const [filterAnnee,  setFilterAnnee]  = useState(2026)
-  const [filterMois,   setFilterMois]   = useState(0)
-  const [filterGroupe, setFilterGroupe] = useState("")
-  const [showAdd,  setShowAdd]  = useState(false)
-  const [editItem, setEditItem] = useState<Depense | null>(null)
+  const [depenses,       setDepenses]       = useState<Depense[]>([])
+  const [bienOptions,    setBienOptions]    = useState<BienOption[]>([])
+  const [immeubleGroups, setImmeubleGroups] = useState<ImmeubleGroup[]>([])
+  const [loading,        setLoading]        = useState(true)
+  const [filterTarget,   setFilterTarget]   = useState("")
+  const [filterAnnee,    setFilterAnnee]    = useState(new Date().getFullYear())
+  const [filterMois,     setFilterMois]     = useState(0)
+  const [filterGroupe,   setFilterGroupe]   = useState("")
+  const [showAdd,        setShowAdd]        = useState(false)
+  const [editItem,       setEditItem]       = useState<Depense | null>(null)
+
+  useEffect(() => { load() }, [])
+
+  async function load() {
+    setLoading(true)
+    const [bienRes, lotRes, depRes] = await Promise.all([
+      supabase.from("biens").select("id, nom").order("nom"),
+      supabase.from("lots").select("id, bien_id, nom"),
+      supabase.from("depenses").select("*").order("date_depense", { ascending: false }),
+    ])
+
+    const rawBiens = (bienRes.data ?? []) as { id: string; nom: string }[]
+    const rawLots  = (lotRes.data  ?? []) as { id: string; bien_id: string; nom: string }[]
+    const rawDeps  = (depRes.data  ?? []) as Record<string, unknown>[]
+
+    const bienMap = new Map(rawBiens.map(b => [b.id, b.nom]))
+    const lotMap  = new Map(rawLots.map(l => [l.id, { nom: l.nom, bien_id: l.bien_id }]))
+
+    const lotsByBien = new Map<string, typeof rawLots>()
+    for (const l of rawLots) {
+      if (!lotsByBien.has(l.bien_id)) lotsByBien.set(l.bien_id, [])
+      lotsByBien.get(l.bien_id)!.push(l)
+    }
+
+    const immeubleIds = new Set(rawLots.map(l => l.bien_id))
+    const newOptions: BienOption[] = []
+    const newGroups: ImmeubleGroup[] = []
+
+    for (const b of rawBiens) {
+      if (immeubleIds.has(b.id)) {
+        const groupLots = (lotsByBien.get(b.id) ?? []).map(l => ({
+          value: `${b.id}|${l.id}`,
+          nom:   l.nom,
+        }))
+        newGroups.push({ id: b.id, nom: b.nom, lots: groupLots })
+        newOptions.push({ value: b.id, bien_id: b.id, lot_id: null, nom: b.nom, isImmeuble: true })
+        for (const l of rawLots.filter(l => l.bien_id === b.id)) {
+          newOptions.push({ value: `${b.id}|${l.id}`, bien_id: b.id, lot_id: l.id, nom: l.nom, isImmeuble: false })
+        }
+      } else {
+        newOptions.push({ value: b.id, bien_id: b.id, lot_id: null, nom: b.nom, isImmeuble: false })
+      }
+    }
+
+    const deps: Depense[] = rawDeps.map(r => ({
+      id:          r.id as string,
+      user_id:     r.user_id as string,
+      bien_id:     r.bien_id as string,
+      bien_nom:    bienMap.get(r.bien_id as string) ?? "",
+      lot_id:      (r.lot_id as string | null) ?? null,
+      lot_nom:     r.lot_id ? (lotMap.get(r.lot_id as string)?.nom ?? null) : null,
+      categorie:   r.categorie as CategorieDep,
+      montant:     Number(r.montant),
+      date:        r.date_depense as string,
+      description: (r.description as string | null) ?? undefined,
+      deductible:  r.deductible as boolean,
+      recuperable: r.recuperable as boolean,
+      payee:       r.payee as boolean,
+    }))
+
+    setBienOptions(newOptions)
+    setImmeubleGroups(newGroups)
+    setDepenses(deps)
+    setLoading(false)
+  }
+
+  // Années disponibles depuis les données réelles
+  const anneesDispos = useMemo(() => {
+    const years = new Set(depenses.map(d => parseInt(d.date.slice(0, 4))))
+    const cur = new Date().getFullYear()
+    years.add(cur)
+    years.add(cur - 1)
+    return Array.from(years).sort((a, b) => b - a)
+  }, [depenses])
 
   const filtered = useMemo(() => {
     return depenses.filter(d => {
       const [y, m] = d.date.split("-")
       if (parseInt(y) !== filterAnnee)              return false
       if (filterMois && parseInt(m) !== filterMois) return false
-      if (filterBien && d.bien_id !== filterBien)   return false
+      if (filterTarget) {
+        if (filterTarget.includes("|")) {
+          const [, lotId] = filterTarget.split("|")
+          if (d.lot_id !== lotId) return false
+        } else {
+          if (d.bien_id !== filterTarget) return false
+        }
+      }
       if (filterGroupe) {
         const g = CAT_GROUPS.find(g => g.id === filterGroupe)
         if (g && !(g.cats as string[]).includes(d.categorie)) return false
       }
       return true
     })
-  }, [depenses, filterBien, filterAnnee, filterMois, filterGroupe])
+  }, [depenses, filterTarget, filterAnnee, filterMois, filterGroupe])
 
   const totalPeriode    = filtered.reduce((s, d) => s + d.montant, 0)
   const totalDeductible = filtered.filter(d => d.deductible).reduce((s, d) => s + d.montant, 0)
   const nbMoisActifs    = useMemo(() => new Set(filtered.map(d => d.date.slice(0, 7))).size, [filtered])
   const moyMensuelle    = nbMoisActifs > 0 ? totalPeriode / nbMoisActifs : 0
 
-  // Groupement par groupe de catégorie → sous-groupe par catégorie
   const groupedByCat = useMemo(() => {
     return CAT_GROUPS
       .filter(g => !filterGroupe || g.id === filterGroupe)
@@ -440,21 +550,56 @@ export default function DepensesPage() {
       })
   }, [filtered, filterGroupe])
 
-  function handleDelete(id: string) {
-    if (window.confirm("Supprimer cette dépense ?"))
-      setDepenses(prev => prev.filter(d => d.id !== id))
+  async function handleDelete(id: string) {
+    if (!window.confirm("Supprimer cette dépense ?")) return
+    await supabase.from("depenses").delete().eq("id", id)
+    setDepenses(prev => prev.filter(d => d.id !== id))
   }
 
-  function handleSaveAdd(d: Depense) {
-    setDepenses(prev => [d, ...prev])
-    const annee = parseInt(d.date.split("-")[0])
-    if (annee !== filterAnnee) setFilterAnnee(annee)
-    setFilterMois(0)
-    if (filterBien && filterBien !== d.bien_id) setFilterBien("")
+  async function handleSaveAdd(form: FormState) {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return
+    const { bien_id, lot_id } = resolveTarget(form.target, bienOptions)
+    await supabase.from("depenses").insert({
+      user_id:      user.id,
+      bien_id,
+      lot_id,
+      categorie:    form.categorie,
+      montant:      parseFloat(form.montant),
+      date_depense: form.date,
+      description:  form.description || null,
+      deductible:   form.deductible,
+      recuperable:  form.recuperable,
+      payee:        form.payee,
+    })
+    setShowAdd(false)
+    await load()
   }
 
-  function handleSaveEdit(updated: Depense) {
-    setDepenses(prev => prev.map(d => d.id === updated.id ? updated : d))
+  async function handleSaveEdit(form: FormState) {
+    if (!editItem) return
+    const { bien_id, lot_id } = resolveTarget(form.target, bienOptions)
+    await supabase.from("depenses").update({
+      bien_id,
+      lot_id,
+      categorie:    form.categorie,
+      montant:      parseFloat(form.montant),
+      date_depense: form.date,
+      description:  form.description || null,
+      deductible:   form.deductible,
+      recuperable:  form.recuperable,
+      payee:        form.payee,
+    }).eq("id", editItem.id)
+    setEditItem(null)
+    await load()
+  }
+
+  if (loading) {
+    return (
+      <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:200, color:C.tm, fontSize:14 }}>
+        Chargement…
+      </div>
+    )
   }
 
   return (
@@ -477,16 +622,31 @@ export default function DepensesPage() {
 
       {/* ── Filtres ───────────────────────────────────────── */}
       <div style={{ background:C.wh, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:16, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
-        <FieldSelect label="Bien" value={filterBien} onChange={setFilterBien}>
-          <option value="">Tous les biens</option>
-          {BIENS_REF.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
-        </FieldSelect>
+        <div>
+          <label style={{ display:"block", fontSize:10, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:3 }}>Bien</label>
+          <select
+            value={filterTarget}
+            onChange={e => setFilterTarget(e.target.value)}
+            style={{ width:"100%", padding:"8px 10px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:13, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none", boxSizing:"border-box" }}
+          >
+            <option value="">Tous les biens</option>
+            {bienOptions.filter(o => !o.lot_id && !immeubleGroups.some(g => g.id === o.bien_id)).map(o => (
+              <option key={o.value} value={o.value}>{o.nom}</option>
+            ))}
+            {immeubleGroups.map(g => (
+              <optgroup key={g.id} label={`🏢 ${g.nom}`}>
+                <option value={g.id}>{g.nom} (tous les lots)</option>
+                {g.lots.map(l => <option key={l.value} value={l.value}>└ {l.nom}</option>)}
+              </optgroup>
+            ))}
+          </select>
+        </div>
         <FieldSelect label="Groupe de dépenses" value={filterGroupe} onChange={setFilterGroupe}>
           <option value="">Tous les groupes</option>
           {CAT_GROUPS.map(g => <option key={g.id} value={g.id}>{g.emoji} {g.label}</option>)}
         </FieldSelect>
         <FieldSelect label="Année" value={filterAnnee.toString()} onChange={v => setFilterAnnee(parseInt(v))}>
-          {ANNEES_DISPO.map(a => <option key={a} value={a}>{a}</option>)}
+          {anneesDispos.map(a => <option key={a} value={a}>{a}</option>)}
         </FieldSelect>
         <FieldSelect label="Mois" value={filterMois.toString()} onChange={v => setFilterMois(parseInt(v))}>
           <option value="0">Tous les mois</option>
@@ -509,7 +669,7 @@ export default function DepensesPage() {
         ))}
       </div>
 
-      {/* ── Synthèse par groupe (toujours affichée) ──────── */}
+      {/* ── Synthèse par groupe ───────────────────────────── */}
       <div style={{ background:C.wh, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:18 }}>
         <div style={{ fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:12 }}>
           Synthèse par catégorie
@@ -562,7 +722,6 @@ export default function DepensesPage() {
           .filter(({ items }) => items.length > 0)
           .map(({ g, items, total, totalDed, byCat }) => (
             <div key={g.id} style={{ marginBottom:20 }}>
-              {/* En-tête de groupe */}
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", background:`linear-gradient(90deg,${g.bg},${g.bg}88)`, borderRadius:"10px 10px 0 0", borderLeft:`4px solid ${g.color}` }}>
                 <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                   <span style={{ fontSize:16 }}>{g.emoji}</span>
@@ -579,7 +738,6 @@ export default function DepensesPage() {
                 </div>
               </div>
 
-              {/* Sous-groupes par catégorie spécifique */}
               <div style={{ background:C.wh, border:`1px solid ${C.br}`, borderTop:"none", borderRadius:"0 0 10px 10px", overflow:"hidden" }}>
                 {g.cats
                   .filter(cat => (byCat[cat]?.length ?? 0) > 0)
@@ -590,7 +748,6 @@ export default function DepensesPage() {
                     const isLastCat = ci === arr.length - 1
                     return (
                       <div key={cat} style={{ borderBottom: isLastCat ? "none" : `1px solid ${C.br}` }}>
-                        {/* Sous-en-tête catégorie */}
                         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"8px 16px", background:C.cr }}>
                           <div style={{ display:"flex", alignItems:"center", gap:6 }}>
                             <span style={{ fontSize:13 }}>{cfg.emoji}</span>
@@ -598,7 +755,6 @@ export default function DepensesPage() {
                           </div>
                           <span style={{ fontSize:12, fontWeight:800, color:C.rd }}>−{euro(catTotal)}</span>
                         </div>
-                        {/* Items */}
                         <div style={{ padding:"0 16px" }}>
                           {catItems.map(d => (
                             <DepenseLigne key={d.id} d={d} onEdit={() => setEditItem(d)} onDelete={() => handleDelete(d.id)} />
@@ -615,15 +771,19 @@ export default function DepensesPage() {
       {/* ── Modals ────────────────────────────────────────── */}
       {showAdd && (
         <DepenseModal
+          bienOptions={bienOptions}
+          immeubleGroups={immeubleGroups}
           onClose={() => setShowAdd(false)}
-          onSave={d => { handleSaveAdd(d); setShowAdd(false) }}
+          onSave={handleSaveAdd}
         />
       )}
       {editItem && (
         <DepenseModal
           initialValues={editItem}
+          bienOptions={bienOptions}
+          immeubleGroups={immeubleGroups}
           onClose={() => setEditItem(null)}
-          onSave={updated => { handleSaveEdit(updated); setEditItem(null) }}
+          onSave={handleSaveEdit}
         />
       )}
     </>
