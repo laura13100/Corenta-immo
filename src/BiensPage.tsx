@@ -12,21 +12,22 @@ const C = {
 
 const euro = (n: number) => n.toLocaleString("fr-FR", { style: "currency", currency: "EUR" })
 
-type TypeBien = "appartement" | "maison" | "garage" | "local" | "autre"
-type Statut   = "loue" | "vacant"
-type Regime   = "micro-foncier" | "reel" | "LMNP-micro" | "LMNP-reel"
+type TypeBien      = "appartement" | "maison" | "garage" | "local" | "autre"
+type Statut        = "loue" | "vacant"
+type ModeDetention = "nom-propre" | "indivision" | "sci-ir" | "sci-is" | "sarl-famille" | "sas" | "holding" | "autre"
+type RegimeFiscal  = "foncier-micro" | "foncier-reel" | "lmnp-micro" | "lmnp-reel" | "lmp" | "is" | "autre"
 
 interface BienSimple {
   kind: "simple"
   id: string; nom: string; adresse: string
-  type: TypeBien; regime: Regime; statut: Statut
+  type: TypeBien; mode_detention: ModeDetention; regime_fiscal: RegimeFiscal; statut: Statut
   locataire?: string
   loyer_hc: number; charges: number; depenses: number
 }
 
 interface Lot {
   id: string; immeuble_id: string; nom: string
-  type: TypeBien; regime: Regime; statut: Statut
+  type: TypeBien; regime_fiscal: RegimeFiscal; statut: Statut
   locataire?: string
   loyer_hc: number; charges: number; depenses: number
 }
@@ -34,7 +35,7 @@ interface Lot {
 interface Immeuble {
   kind: "immeuble"
   id: string; nom: string; adresse: string
-  regime: Regime; lots: Lot[]
+  mode_detention: ModeDetention; regime_fiscal: RegimeFiscal; lots: Lot[]
 }
 
 type Bien = BienSimple | Immeuble
@@ -46,34 +47,64 @@ const TYPE_LABELS: Record<TypeBien, string> = {
 const TYPE_EMOJI: Record<TypeBien, string> = {
   appartement: "🏠", maison: "🏡", garage: "🅿️", local: "🏪", autre: "🏗",
 }
-const REGIME_LABELS: Record<Regime, string> = {
-  "micro-foncier": "Micro-foncier", "reel": "Réel",
-  "LMNP-micro": "LMNP Micro-BIC", "LMNP-reel": "LMNP Réel",
+const MODE_DETENTION_LABELS: Record<ModeDetention, string> = {
+  "nom-propre":    "Nom propre",
+  "indivision":    "Indivision",
+  "sci-ir":        "SCI à l'IR",
+  "sci-is":        "SCI à l'IS",
+  "sarl-famille":  "SARL de famille",
+  "sas":           "SAS",
+  "holding":       "Holding",
+  "autre":         "Autre",
+}
+const REGIME_FISCAL_LABELS: Record<RegimeFiscal, string> = {
+  "foncier-micro": "Revenus fonciers — micro",
+  "foncier-reel":  "Revenus fonciers — réel",
+  "lmnp-micro":    "LMNP micro-BIC",
+  "lmnp-reel":     "LMNP réel",
+  "lmp":           "LMP",
+  "is":            "IS",
+  "autre":         "Autre",
 }
 
 // ── Mapping DB → types locaux ──────────────────────────────
-// On stocke le type de bien (simple/immeuble/lot) dans le champ notes
-// car le schéma existant n'a pas de colonne kind dédiée.
 
 function parseMeta(row: any): Record<string, string> {
   try { return JSON.parse(row.notes || "{}") } catch { return {} }
 }
 
+function parseRegimeFiscal(v: string): RegimeFiscal {
+  // compatibilité avec les anciennes valeurs stockées
+  const compat: Record<string, RegimeFiscal> = {
+    "micro-foncier": "foncier-micro",
+    "reel":          "foncier-reel",
+    "LMNP-micro":    "lmnp-micro",
+    "LMNP-reel":     "lmnp-reel",
+  }
+  const valid: RegimeFiscal[] = ["foncier-micro","foncier-reel","lmnp-micro","lmnp-reel","lmp","is","autre"]
+  if (valid.includes(v as RegimeFiscal)) return v as RegimeFiscal
+  return compat[v] ?? "foncier-micro"
+}
+
 function rowToSimple(row: any): BienSimple {
+  const meta = parseMeta(row)
   return {
     kind: "simple",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
     type: (row.type ?? "appartement") as TypeBien,
-    regime: (row.regime_fiscal ?? "micro-foncier") as Regime,
+    mode_detention: (meta.mode_detention ?? "nom-propre") as ModeDetention,
+    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-micro"),
     statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
   }
 }
 
 function rowToImmeuble(row: any, lots: Lot[]): Immeuble {
+  const meta = parseMeta(row)
   return {
     kind: "immeuble",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
-    regime: (row.regime_fiscal ?? "reel") as Regime,
+    mode_detention: (meta.mode_detention ?? "nom-propre") as ModeDetention,
+    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-reel"),
     lots,
   }
 }
@@ -83,7 +114,7 @@ function rowToLot(row: any, meta: Record<string, string>): Lot {
     id: row.id, immeuble_id: meta.parent ?? "",
     nom: row.nom,
     type: (row.type ?? "appartement") as TypeBien,
-    regime: (row.regime_fiscal ?? "micro-foncier") as Regime,
+    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-micro"),
     statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
   }
 }
@@ -188,7 +219,8 @@ function BienSimpleCard({ bien, onClick }: { bien: BienSimple; onClick: () => vo
           <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
             <Badge label={TYPE_LABELS[bien.type]} />
             <Badge label={loue?"Loué":"Vacant"} bg={loue?C.gp:C.rp} color={loue?C.g:C.rd} />
-            <Badge label={REGIME_LABELS[bien.regime]} bg={C.bp} color={C.bl} />
+            <Badge label={MODE_DETENTION_LABELS[bien.mode_detention]} bg="#f0edf8" color="#6c3fc7" />
+            <Badge label={REGIME_FISCAL_LABELS[bien.regime_fiscal]} bg={C.bp} color={C.bl} />
           </div>
         </div>
         <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -250,7 +282,8 @@ function ImmeubleCard({ immeuble, onClick, onAddLot, onClickLot }: {
             <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               <Badge label={`${immeuble.lots.length} lot${immeuble.lots.length!==1?"s":""}`} />
               <Badge label={`${nbLoues} loué${nbLoues!==1?"s":""}`} bg={nbLoues>0?C.gp:C.rp} color={nbLoues>0?C.g:C.rd} />
-              <Badge label={REGIME_LABELS[immeuble.regime]} bg={C.bp} color={C.bl} />
+              <Badge label={MODE_DETENTION_LABELS[immeuble.mode_detention]} bg="#f0edf8" color="#6c3fc7" />
+              <Badge label={REGIME_FISCAL_LABELS[immeuble.regime_fiscal]} bg={C.bp} color={C.bl} />
             </div>
           </div>
           <div style={{ textAlign:"right", flexShrink:0 }}>
@@ -328,10 +361,11 @@ function BienSimpleDetail({ bien, onBack }: { bien: BienSimple; onBack: () => vo
           </div>
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}`, gridColumn:"1/-1" }}>
             <SectionTitle>Informations</SectionTitle>
-            <InfoRow label="Type"            value={TYPE_LABELS[bien.type]} />
-            <InfoRow label="Régime fiscal"   value={REGIME_LABELS[bien.regime]} />
-            <InfoRow label="Loyer annuel"    value={euro(bien.loyer_hc*12)} />
-            <InfoRow label="Résultat annuel" value={(c*12>=0?"+":"")+euro(c*12)} bold color={c>=0?C.g:C.rd} />
+            <InfoRow label="Type"                value={TYPE_LABELS[bien.type]} />
+            <InfoRow label="Mode de détention"   value={MODE_DETENTION_LABELS[bien.mode_detention]} />
+            <InfoRow label="Régime fiscal"        value={REGIME_FISCAL_LABELS[bien.regime_fiscal]} />
+            <InfoRow label="Loyer annuel"         value={euro(bien.loyer_hc*12)} />
+            <InfoRow label="Résultat annuel"      value={(c*12>=0?"+":"")+euro(c*12)} bold color={c>=0?C.g:C.rd} />
           </div>
         </div>
       )}
@@ -374,11 +408,12 @@ function LotDetail({ lot, immeuble, onBack }: { lot: Lot; immeuble: Immeuble; on
           </div>
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}`, gridColumn:"1/-1" }}>
             <SectionTitle>Informations</SectionTitle>
-            <InfoRow label="Immeuble"        value={immeuble.nom} />
-            <InfoRow label="Type"            value={TYPE_LABELS[lot.type]} />
-            <InfoRow label="Régime fiscal"   value={REGIME_LABELS[lot.regime]} />
-            <InfoRow label="Loyer annuel"    value={euro(lot.loyer_hc*12)} />
-            <InfoRow label="Résultat annuel" value={(c*12>=0?"+":"")+euro(c*12)} bold color={c>=0?C.g:C.rd} />
+            <InfoRow label="Immeuble"            value={immeuble.nom} />
+            <InfoRow label="Type"                value={TYPE_LABELS[lot.type]} />
+            <InfoRow label="Mode de détention"   value={MODE_DETENTION_LABELS[immeuble.mode_detention]} />
+            <InfoRow label="Régime fiscal"        value={REGIME_FISCAL_LABELS[lot.regime_fiscal]} />
+            <InfoRow label="Loyer annuel"         value={euro(lot.loyer_hc*12)} />
+            <InfoRow label="Résultat annuel"      value={(c*12>=0?"+":"")+euro(c*12)} bold color={c>=0?C.g:C.rd} />
           </div>
         </div>
       )}
@@ -440,6 +475,7 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot }: {
                     <div style={{ display:"flex", gap:6, flexWrap:"wrap", alignItems:"center" }}>
                       <Badge label={TYPE_LABELS[lot.type]} />
                       <Badge label={loue?"Loué":"Vacant"} bg={loue?C.gp:C.rp} color={loue?C.g:C.rd} />
+                      <Badge label={REGIME_FISCAL_LABELS[lot.regime_fiscal]} bg={C.bp} color={C.bl} />
                       {loue && lot.locataire && <span style={{ fontSize:12, color:C.tm }}>👤 {lot.locataire}</span>}
                     </div>
                   </div>
@@ -458,7 +494,8 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot }: {
         <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}` }}>
           <SectionTitle>Informations de l'immeuble</SectionTitle>
           <InfoRow label="Adresse"              value={immeuble.adresse || "—"} />
-          <InfoRow label="Régime fiscal"        value={REGIME_LABELS[immeuble.regime]} />
+          <InfoRow label="Mode de détention"    value={MODE_DETENTION_LABELS[immeuble.mode_detention]} />
+          <InfoRow label="Régime fiscal"        value={REGIME_FISCAL_LABELS[immeuble.regime_fiscal]} />
           <InfoRow label="Nombre de lots"       value={String(immeuble.lots.length)} />
           <InfoRow label="Lots loués"           value={`${nbLoues} / ${immeuble.lots.length}`} />
           <InfoRow label="Loyers totaux / mois" value={euro(immeuble.lots.reduce((s,l)=>s+l.loyer_hc,0))} />
@@ -483,39 +520,55 @@ function TypeOptions() {
   </>
 }
 
-function RegimeOptions() {
+function ModeDetentionOptions() {
   return <>
-    <option value="micro-foncier">Micro-foncier</option>
-    <option value="reel">Réel</option>
-    <option value="LMNP-micro">LMNP Micro-BIC</option>
-    <option value="LMNP-reel">LMNP Réel</option>
+    <option value="nom-propre">Nom propre</option>
+    <option value="indivision">Indivision</option>
+    <option value="sci-ir">SCI à l'IR</option>
+    <option value="sci-is">SCI à l'IS</option>
+    <option value="sarl-famille">SARL de famille</option>
+    <option value="sas">SAS</option>
+    <option value="holding">Holding</option>
+    <option value="autre">Autre</option>
+  </>
+}
+
+function RegimeFiscalOptions() {
+  return <>
+    <option value="foncier-micro">Revenus fonciers — micro</option>
+    <option value="foncier-reel">Revenus fonciers — réel</option>
+    <option value="lmnp-micro">LMNP micro-BIC</option>
+    <option value="lmnp-reel">LMNP réel</option>
+    <option value="lmp">LMP</option>
+    <option value="is">IS</option>
+    <option value="autre">Autre</option>
   </>
 }
 
 function AddBienSimpleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", type:"appartement", regime:"micro-foncier" })
+  const [f, setF] = useState({ nom:"", adresse:"", type:"appartement", mode_detention:"nom-propre", regime_fiscal:"foncier-micro" })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   return (
     <Modal title="Nouveau bien simple" onClose={onClose}>
       <FieldInput label="Nom *" placeholder="Ex. Appartement Gambetta" value={f.nom} onChange={set("nom")} />
       <FieldInput label="Adresse" placeholder="12 rue de la Paix, 69001 Lyon" value={f.adresse} onChange={set("adresse")} />
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
-        <FieldSelect label="Régime fiscal" value={f.regime} onChange={set("regime")}><RegimeOptions /></FieldSelect>
-      </div>
+      <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
+      <FieldSelect label="Mode de détention" value={f.mode_detention} onChange={set("mode_detention")}><ModeDetentionOptions /></FieldSelect>
+      <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
       <SaveBtn label="Enregistrer" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
 }
 
 function AddImmeubleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", regime:"reel" })
+  const [f, setF] = useState({ nom:"", adresse:"", mode_detention:"nom-propre", regime_fiscal:"foncier-reel" })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   return (
     <Modal title="Nouvel immeuble" onClose={onClose}>
       <FieldInput label="Nom *" placeholder="Ex. Immeuble Confluence" value={f.nom} onChange={set("nom")} />
       <FieldInput label="Adresse" placeholder="8 quai Perrache, 69002 Lyon" value={f.adresse} onChange={set("adresse")} />
-      <FieldSelect label="Régime fiscal" value={f.regime} onChange={set("regime")}><RegimeOptions /></FieldSelect>
+      <FieldSelect label="Mode de détention" value={f.mode_detention} onChange={set("mode_detention")}><ModeDetentionOptions /></FieldSelect>
+      <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
       <div style={{ background:C.gp, borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:C.g, fontWeight:600 }}>
         💡 Créé vide — vous ajouterez les lots ensuite.
       </div>
@@ -525,14 +578,14 @@ function AddImmeubleModal({ onClose, onSave }: { onClose: () => void; onSave: (f
 }
 
 function AddLotModal({ immeuble, onClose, onSave }: { immeuble: Immeuble; onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", type:"appartement", regime:immeuble.regime })
+  const [f, setF] = useState({ nom:"", type:"appartement", regime_fiscal: immeuble.regime_fiscal })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   return (
     <Modal title={`Nouveau lot · ${immeuble.nom}`} onClose={onClose}>
       <FieldInput label="Nom du lot *" placeholder="Ex. Appt 1A – T3" value={f.nom} onChange={set("nom")} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
-        <FieldSelect label="Régime fiscal" value={f.regime} onChange={set("regime")}><RegimeOptions /></FieldSelect>
+        <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
       </div>
       <SaveBtn label="Ajouter le lot" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
@@ -570,7 +623,6 @@ export default function BiensPage() {
     setLoading(false)
     if (error) { setDbError(error.message); return }
 
-    // Sépare simples / immeubles / lots selon les métadonnées stockées dans notes
     const rows = data ?? []
     const lotRows  = rows.filter(r => parseMeta(r).kind === "lot")
     const immRows  = rows.filter(r => parseMeta(r).kind === "immeuble")
@@ -590,7 +642,7 @@ export default function BiensPage() {
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, type: f.type, regime_fiscal: f.regime })
+      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, type: f.type, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ mode_detention: f.mode_detention }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToSimple(data)])
@@ -601,7 +653,7 @@ export default function BiensPage() {
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "immeuble" }) })
+      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ kind: "immeuble", mode_detention: f.mode_detention }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToImmeuble(data, [])])
@@ -612,7 +664,7 @@ export default function BiensPage() {
     setAddLotFor(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime, notes: JSON.stringify({ kind: "lot", parent: immeubleId }) })
+      .insert({ owner_id: userId, nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ kind: "lot", parent: immeubleId }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     const newLot = rowToLot(data, { kind: "lot", parent: immeubleId })
