@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#2d5b3d"/>
+  <!-- Toit maison -->
+  <polygon points="256,80 96,240 176,240 176,420 336,420 336,240 416,240" fill="white" opacity="0.95"/>
+  <!-- Porte -->
+  <rect x="220" y="310" width="72" height="110" rx="8" fill="#2d5b3d"/>
+  <!-- Fenêtre gauche -->
+  <rect x="144" y="280" width="54" height="50" rx="6" fill="#a8d5b5"/>
+  <!-- Fenêtre droite -->
+  <rect x="314" y="280" width="54" height="50" rx="6" fill="#a8d5b5"/>
+  <!-- € symbole -->
+  <text x="256" y="210" text-anchor="middle" font-family="Arial,sans-serif" font-weight="900" font-size="72" fill="#2d5b3d">€</text>
+</svg>
