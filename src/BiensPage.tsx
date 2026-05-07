@@ -351,6 +351,103 @@ function PlaceholderTab({ tab }: { tab: string }) {
   )
 }
 
+// ── Documents associés (démo) ──────────────────────────────
+
+type DemoCategorie = "bail" | "diagnostic" | "facture" | "assurance" | "impot" | "autre"
+const DEMO_CAT_EMOJI: Record<DemoCategorie, string> = {
+  bail: "📜", diagnostic: "🔍", facture: "🧾", assurance: "🛡️", impot: "🏛️", autre: "📄",
+}
+const DEMO_CAT_LABEL: Record<DemoCategorie, string> = {
+  bail: "Bail", diagnostic: "Diagnostic", facture: "Facture",
+  assurance: "Assurance", impot: "Impôt", autre: "Autre",
+}
+const DEMO_CAT_COLOR: Record<DemoCategorie, string> = {
+  bail: "#2d5b3d", diagnostic: "#2471a3", facture: "#ca6f1e",
+  assurance: "#7d3c98", impot: "#b7860b", autre: "#6b8c74",
+}
+const DEMO_CAT_BG: Record<DemoCategorie, string> = {
+  bail: "#e6efe9", diagnostic: "#eaf4fb", facture: "#fdf2e9",
+  assurance: "#f4ecf7", impot: "#fef9e7", autre: "#eeebe3",
+}
+interface DemoDoc { id: string; bien_nom: string; categorie: DemoCategorie; nom: string; date: string; description?: string }
+const DEMO_DOCS: DemoDoc[] = [
+  { id:"d01", bien_nom:"Appartement Gambetta", categorie:"bail",        nom:"Bail meublé — Sophie Martin",       date:"2024-09-01", description:"Bail meublé 1 an renouvelable" },
+  { id:"d02", bien_nom:"Appartement Gambetta", categorie:"diagnostic",  nom:"DPE 2024 — Gambetta",               date:"2024-08-15", description:"Classe C" },
+  { id:"d03", bien_nom:"Appartement Gambetta", categorie:"assurance",   nom:"Attestation PNO 2026",              date:"2026-01-01" },
+  { id:"d04", bien_nom:"Appartement Gambetta", categorie:"impot",       nom:"Taxe foncière 2025",                date:"2025-09-20", description:"1 240 €" },
+  { id:"d05", bien_nom:"Appartement Gambetta", categorie:"facture",     nom:"Facture plombier mars 2026",        date:"2026-03-12", description:"320 €" },
+  { id:"d06", bien_nom:"Studio Confluence",    categorie:"bail",        nom:"Bail meublé — Thomas Durand",       date:"2025-05-01" },
+  { id:"d07", bien_nom:"Studio Confluence",    categorie:"diagnostic",  nom:"DPE 2023 — Confluence",             date:"2023-04-20", description:"Classe D" },
+  { id:"d08", bien_nom:"Studio Confluence",    categorie:"assurance",   nom:"Attestation PNO 2026",              date:"2026-01-01" },
+  { id:"d09", bien_nom:"Studio Confluence",    categorie:"facture",     nom:"Facture peinture fév. 2026",        date:"2026-02-22", description:"1 200 €" },
+  { id:"d10", bien_nom:"Garage Bellecour",     categorie:"bail",        nom:"Bail parking — Marie Blanc",        date:"2023-06-01", description:"Reconduit tacitement" },
+  { id:"d11", bien_nom:"Garage Bellecour",     categorie:"assurance",   nom:"Attestation assurance garage 2026", date:"2026-01-01" },
+  { id:"d12", bien_nom:"T2 Croix-Rousse",     categorie:"diagnostic",  nom:"DPE 2024 — Croix-Rousse",          date:"2024-11-05", description:"Classe E" },
+  { id:"d13", bien_nom:"T2 Croix-Rousse",     categorie:"facture",     nom:"Facture chauffe-eau fév. 2026",     date:"2026-02-18", description:"1 200 €" },
+  { id:"d14", bien_nom:"T2 Croix-Rousse",     categorie:"facture",     nom:"Facture peinture mars 2026",        date:"2026-03-10", description:"450 €" },
+]
+
+const fmtDate = (d: string) => { const [y,m,j] = d.split("-"); return `${j}/${m}/${y}` }
+
+function DocAssocies({ nomBien }: { nomBien: string }) {
+  const docs = DEMO_DOCS.filter(d => d.bien_nom === nomBien)
+
+  if (docs.length === 0) {
+    return (
+      <div style={{ background:"#fff", borderRadius:14, padding:"48px 20px", border:"1px solid #dde8e0", textAlign:"center" }}>
+        <div style={{ fontSize:40, marginBottom:12 }}>📎</div>
+        <div style={{ fontWeight:700, fontSize:15, color:"#1a2a1f", marginBottom:6 }}>Aucun document</div>
+        <div style={{ color:"#6b8c74", fontSize:13 }}>Ajoutez des documents depuis l'onglet Documents.</div>
+      </div>
+    )
+  }
+
+  const CAT_ORDER: DemoCategorie[] = ["bail","facture","assurance","diagnostic","impot","autre"]
+  const byCat: Partial<Record<DemoCategorie, DemoDoc[]>> = {}
+  for (const d of docs) {
+    if (!byCat[d.categorie]) byCat[d.categorie] = []
+    byCat[d.categorie]!.push(d)
+  }
+
+  return (
+    <div>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <span style={{ fontWeight:700, fontSize:14, color:"#1a2a1f" }}>📎 Documents associés</span>
+        <span style={{ fontSize:11, fontWeight:700, background:"#e6efe9", color:"#2d5b3d", padding:"2px 9px", borderRadius:10 }}>{docs.length}</span>
+      </div>
+      {CAT_ORDER.filter(cat => (byCat[cat]?.length ?? 0) > 0).map(cat => (
+        <div key={cat} style={{ marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:8 }}>
+            <span style={{ fontSize:12 }}>{DEMO_CAT_EMOJI[cat]}</span>
+            <span style={{ fontSize:11, fontWeight:700, color:DEMO_CAT_COLOR[cat], textTransform:"uppercase", letterSpacing:".06em" }}>
+              {DEMO_CAT_LABEL[cat]}
+            </span>
+            <span style={{ fontSize:10, fontWeight:700, color:DEMO_CAT_COLOR[cat], background:DEMO_CAT_BG[cat], padding:"1px 6px", borderRadius:8 }}>
+              {byCat[cat]!.length}
+            </span>
+          </div>
+          {byCat[cat]!.map(d => (
+            <div key={d.id} style={{ background:"#fff", borderRadius:10, padding:"11px 14px", marginBottom:6, border:"1.5px solid #dde8e0", display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:38, height:38, borderRadius:9, background:DEMO_CAT_BG[cat], display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>
+                {DEMO_CAT_EMOJI[cat]}
+              </div>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:"#1a2a1f" }}>{d.nom}</div>
+                <div style={{ fontSize:11, color:"#6b8c74", marginTop:2 }}>
+                  📅 {fmtDate(d.date)}{d.description ? ` · ${d.description}` : ""}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ))}
+      <div style={{ fontSize:11, color:"#6b8c74", marginTop:8, padding:"10px 14px", background:"#f7f4ee", borderRadius:9 }}>
+        Données de démo. Gérez tous les documents depuis l'onglet Documents.
+      </div>
+    </div>
+  )
+}
+
 function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
   bien: BienSimple; onBack: () => void; onEdit: () => void; onDelete: () => void
 }) {
@@ -400,7 +497,8 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
           </div>
         </div>
       )}
-      {tab !== "infos" && <PlaceholderTab tab={tab} />}
+      {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
+      {tab === "documents" && <DocAssocies nomBien={bien.nom} />}
     </div>
   )
 }
@@ -408,7 +506,7 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
 function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
   lot: Lot; immeuble: Immeuble; onBack: () => void; onEdit: () => void; onDelete: () => void
 }) {
-  const [tab, setTab] = useState<"infos"|"recettes"|"depenses">("infos")
+  const [tab, setTab] = useState<"infos"|"recettes"|"depenses"|"documents">("infos")
   const c = cf(lot); const loue = lot.statut === "loue"
   return (
     <div>
@@ -424,9 +522,9 @@ function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
       <div style={{ fontSize:11, color:C.tm, marginBottom:12, fontWeight:600 }}>🏢 {immeuble.nom} › {lot.nom}</div>
       <DetailBanner title={`${TYPE_EMOJI[lot.type]} ${lot.nom}`} subtitle={immeuble.adresse} cashflow={c} />
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
-        {(["infos","recettes","depenses"] as const).map(t => (
+        {(["infos","recettes","depenses","documents"] as const).map(t => (
           <button key={t} onClick={() => setTab(t)} style={{ padding:"7px 14px", borderRadius:9, border:`1.5px solid ${tab===t?C.g:C.br}`, background:tab===t?C.g:C.wh, color:tab===t?"#fff":C.tx, fontWeight:600, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
-            {t==="infos"?"📋 Infos":t==="recettes"?"💰 Recettes":"📉 Dépenses"}
+            {t==="infos"?"📋 Infos":t==="recettes"?"💰 Recettes":t==="depenses"?"📉 Dépenses":"📎 Documents"}
           </button>
         ))}
       </div>
@@ -456,7 +554,8 @@ function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
           </div>
         </div>
       )}
-      {tab !== "infos" && <PlaceholderTab tab={tab} />}
+      {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
+      {tab === "documents" && <DocAssocies nomBien={lot.nom} />}
     </div>
   )
 }
@@ -465,7 +564,7 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot, onEdit, onDele
   immeuble: Immeuble; onBack: () => void; onAddLot: () => void; onClickLot: (l: Lot) => void
   onEdit: () => void; onDelete: () => void
 }) {
-  const [tab, setTab] = useState<"lots"|"infos"|"recettes"|"depenses">("lots")
+  const [tab, setTab] = useState<"lots"|"infos"|"recettes"|"depenses"|"documents">("lots")
   const c = immCf(immeuble)
   const nbLoues = immeuble.lots.filter(l => l.statut === "loue").length
 
@@ -483,9 +582,9 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot, onEdit, onDele
       <DetailBanner title={`🏢 ${immeuble.nom}`} subtitle={immeuble.adresse} cashflow={c} lots={immeuble.lots.length} />
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
-          {(["lots","infos","recettes","depenses"] as const).map(t => (
+          {(["lots","infos","recettes","depenses","documents"] as const).map(t => (
             <button key={t} onClick={() => setTab(t)} style={{ padding:"7px 14px", borderRadius:9, border:`1.5px solid ${tab===t?C.g:C.br}`, background:tab===t?C.g:C.wh, color:tab===t?"#fff":C.tx, fontWeight:600, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
-              {t==="lots"?"🏠 Lots":t==="infos"?"📋 Infos":t==="recettes"?"💰 Recettes":"📉 Dépenses"}
+              {t==="lots"?"🏠 Lots":t==="infos"?"📋 Infos":t==="recettes"?"💰 Recettes":t==="depenses"?"📉 Dépenses":"📎 Documents"}
             </button>
           ))}
         </div>
@@ -550,6 +649,7 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot, onEdit, onDele
         </div>
       )}
       {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
+      {tab === "documents" && <DocAssocies nomBien={immeuble.nom} />}
     </div>
   )
 }

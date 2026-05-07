@@ -737,6 +737,67 @@ function RappelsSection({ documents }: { documents: Document[] }) {
   )
 }
 
+// ── Ordre d'affichage des catégories ──────────────────────
+const CAT_ORDER: CategorieDoc[] = ["bail", "facture", "assurance", "diagnostic", "impot", "autre"]
+
+// ── Groupe par bien ────────────────────────────────────────
+
+function BienGroup({ bien, docs, onEdit, onDelete }: {
+  bien: { id: string; nom: string }
+  docs: Document[]
+  onEdit: (d: Document) => void
+  onDelete: (id: string) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  const byCat: Partial<Record<CategorieDoc, Document[]>> = {}
+  for (const d of docs) {
+    if (!byCat[d.categorie]) byCat[d.categorie] = []
+    byCat[d.categorie]!.push(d)
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div
+        onClick={() => setCollapsed(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 14px", borderRadius: 10,
+          background: `linear-gradient(135deg,${C.g},${C.gl})`,
+          cursor: "pointer", marginBottom: collapsed ? 0 : 14,
+          userSelect: "none",
+        }}
+      >
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)" }}>{collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontWeight: 800, fontSize: 15, color: "#fff", flex: 1 }}>{bien.nom}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,.22)", color: "#fff", padding: "2px 9px", borderRadius: 10 }}>
+          {docs.length} doc{docs.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      {!collapsed && (
+        <div>
+          {CAT_ORDER.filter(cat => (byCat[cat]?.length ?? 0) > 0).map(cat => {
+            const catDocs = byCat[cat]!
+            const cfg = CAT_CONFIG[cat]
+            return (
+              <div key={cat} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingLeft: 4 }}>
+                  <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: "uppercase", letterSpacing: ".06em" }}>{cfg.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: "1px 6px", borderRadius: 8 }}>{catDocs.length}</span>
+                </div>
+                {catDocs.map(d => (
+                  <DocumentCard key={d.id} doc={d} onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ── Page principale ────────────────────────────────────────
 
 export default function DocumentsPage() {
@@ -849,7 +910,7 @@ export default function DocumentsPage() {
         })}
       </div>
 
-      {/* ── Liste ────────────────────────────────────────── */}
+      {/* ── Liste groupée par bien ───────────────────────── */}
       {filtered.length === 0 ? (
         <div style={{ background:C.wh, borderRadius:14, padding:"56px 20px", textAlign:"center", border:`1px solid ${C.br}` }}>
           <div style={{ fontSize:40, marginBottom:12 }}>📂</div>
@@ -863,14 +924,36 @@ export default function DocumentsPage() {
           </button>
         </div>
       ) : (
-        filtered.map(d => (
-          <DocumentCard
-            key={d.id}
-            doc={d}
-            onEdit={() => setEditItem(d)}
-            onDelete={() => handleDelete(d.id)}
-          />
-        ))
+        <>
+          {BIENS_REF.map(bien => {
+            const bienDocs = filtered.filter(d => d.bien_id === bien.id)
+            if (bienDocs.length === 0) return null
+            return (
+              <BienGroup
+                key={bien.id}
+                bien={bien}
+                docs={bienDocs}
+                onEdit={setEditItem}
+                onDelete={handleDelete}
+              />
+            )
+          })}
+          {/* Documents sans bien référencé */}
+          {(() => {
+            const knownIds = new Set(BIENS_REF.map(b => b.id))
+            const orphans = filtered.filter(d => !knownIds.has(d.bien_id))
+            if (orphans.length === 0) return null
+            return (
+              <BienGroup
+                key="__orphan__"
+                bien={{ id: "__orphan__", nom: "Autres" }}
+                docs={orphans}
+                onEdit={setEditItem}
+                onDelete={handleDelete}
+              />
+            )
+          })()}
+        </>
       )}
 
       {/* ── Modals ───────────────────────────────────────── */}
