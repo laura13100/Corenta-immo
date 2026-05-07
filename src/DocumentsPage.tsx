@@ -214,7 +214,9 @@ function UploadZone({ onFileSelect }: { onFileSelect: (nom: string) => void }) {
 
 // ── Carte document ─────────────────────────────────────────
 
-function DocumentCard({ doc }: { doc: Document }) {
+function DocumentCard({ doc, onEdit, onDelete }: {
+  doc: Document; onEdit: () => void; onDelete: () => void
+}) {
   const cfg = CAT_CONFIG[doc.categorie]
   return (
     <div
@@ -267,6 +269,20 @@ function DocumentCard({ doc }: { doc: Document }) {
             <span style={{ fontSize: 11, color: C.tm, paddingTop: 2 }}>{doc.taille}</span>
           )}
         </div>
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <button
+            onClick={onEdit}
+            style={{ padding: "4px 10px", borderRadius: 7, background: C.gp, color: C.g, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            ✏️ Modifier
+          </button>
+          <button
+            onClick={onDelete}
+            style={{ padding: "4px 10px", borderRadius: 7, background: C.rp, color: C.rd, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            🗑 Supprimer
+          </button>
+        </div>
       </div>
 
       {/* Bouton voir */}
@@ -305,22 +321,25 @@ interface FormState {
 
 const today = new Date().toISOString().slice(0, 10)
 
-function AddDocumentModal({
-  nomFichierPrefill,
+function DocumentModal({
+  nomFichierPrefill = "",
   onClose,
   onSave,
+  initialValues,
 }: {
-  nomFichierPrefill: string
+  nomFichierPrefill?: string
   onClose: () => void
   onSave: (d: Document) => void
+  initialValues?: Document
 }) {
+  const isEdit = !!initialValues
   const [form, setForm] = useState<FormState>({
-    bien_id:      BIENS_REF[0].id,
-    categorie:    "bail",
-    nom:          nomFichierPrefill.replace(/\.[^.]+$/, "") || "",
-    date:         today,
-    description:  "",
-    type_fichier: nomFichierPrefill.split(".").pop()?.toUpperCase() || "PDF",
+    bien_id:      initialValues?.bien_id      ?? BIENS_REF[0].id,
+    categorie:    initialValues?.categorie    ?? "bail",
+    nom:          initialValues?.nom          ?? (nomFichierPrefill.replace(/\.[^.]+$/, "") || ""),
+    date:         initialValues?.date         ?? today,
+    description:  initialValues?.description  ?? "",
+    type_fichier: initialValues?.type_fichier ?? (nomFichierPrefill.split(".").pop()?.toUpperCase() || "PDF"),
   })
 
   const set = (key: keyof FormState) => (v: string) =>
@@ -332,16 +351,16 @@ function AddDocumentModal({
   const handleSave = () => {
     if (!canSave) return
     onSave({
-      id:           Date.now().toString(),
+      id:           isEdit ? initialValues!.id : Date.now().toString(),
       bien_id:      form.bien_id,
       bien_nom:     bienNom,
       categorie:    form.categorie,
       nom:          form.nom.trim(),
       date:         form.date,
       description:  form.description || undefined,
-      taille:       nomFichierPrefill ? "— Ko" : undefined,
+      taille:       isEdit ? initialValues!.taille : (nomFichierPrefill ? "— Ko" : undefined),
       type_fichier: form.type_fichier || "PDF",
-      simule:       true,
+      simule:       isEdit ? initialValues!.simule : true,
     })
     onClose()
   }
@@ -357,33 +376,35 @@ function AddDocumentModal({
       >
         {/* En-tête */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>Nouveau document</div>
+          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>
+            {isEdit ? "Modifier le document" : "Nouveau document"}
+          </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:C.tm }}>✕</button>
         </div>
 
-        {/* Zone upload dans le modal */}
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
-            Fichier
-          </label>
-          {nomFichierPrefill ? (
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:C.gp, borderRadius:10 }}>
-              <span style={{ fontSize:20 }}>✅</span>
-              <div>
-                <div style={{ fontWeight:700, fontSize:13, color:C.g }}>Fichier sélectionné</div>
-                <div style={{ fontSize:12, color:C.tm }}>{nomFichierPrefill}</div>
+        {/* Zone upload — uniquement à l'ajout */}
+        {!isEdit && (
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
+              Fichier
+            </label>
+            {nomFichierPrefill ? (
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:C.gp, borderRadius:10 }}>
+                <span style={{ fontSize:20 }}>✅</span>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.g }}>Fichier sélectionné</div>
+                  <div style={{ fontSize:12, color:C.tm }}>{nomFichierPrefill}</div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div
-              style={{ border:`2px dashed ${C.br}`, borderRadius:10, padding:"18px 16px", textAlign:"center", cursor:"default", background:C.cr }}
-            >
-              <div style={{ fontSize:24, marginBottom:4 }}>📄</div>
-              <div style={{ fontSize:12, color:C.tm }}>Aucun fichier sélectionné</div>
-              <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>Fermez et utilisez la zone d'upload de la page principale</div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div style={{ border:`2px dashed ${C.br}`, borderRadius:10, padding:"18px 16px", textAlign:"center", cursor:"default", background:C.cr }}>
+                <div style={{ fontSize:24, marginBottom:4 }}>📄</div>
+                <div style={{ fontSize:12, color:C.tm }}>Aucun fichier sélectionné</div>
+                <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>Fermez et utilisez la zone d'upload de la page principale</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Catégorie */}
         <div style={{ marginBottom:14 }}>
@@ -463,7 +484,7 @@ function AddDocumentModal({
             fontFamily:"inherit", transition:"background .15s",
           }}
         >
-          Enregistrer le document
+          {isEdit ? "Enregistrer les modifications" : "Enregistrer le document"}
         </button>
       </div>
     </div>
@@ -478,10 +499,27 @@ export default function DocumentsPage() {
   const [filterCat,  setFilterCat]    = useState("")
   const [showAdd, setShowAdd]         = useState(false)
   const [prefillNom, setPrefillNom]   = useState("")
+  const [editItem, setEditItem]       = useState<Document | null>(null)
 
   const openAddWithFile = (nom: string) => {
     setPrefillNom(nom)
     setShowAdd(true)
+  }
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Supprimer ce document ?")) return
+    setDocuments(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleSaveAdd = (d: Document) => {
+    setDocuments(prev => [d, ...prev])
+    if (filterBien && filterBien !== d.bien_id) setFilterBien("")
+    if (filterCat  && filterCat  !== d.categorie) setFilterCat("")
+  }
+
+  const handleSaveEdit = (updated: Document) => {
+    setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d))
+    setEditItem(null)
   }
 
   // ── Filtrage ───────────────────────────────────────────
@@ -576,19 +614,29 @@ export default function DocumentsPage() {
           </button>
         </div>
       ) : (
-        filtered.map(d => <DocumentCard key={d.id} doc={d} />)
+        filtered.map(d => (
+          <DocumentCard
+            key={d.id}
+            doc={d}
+            onEdit={() => setEditItem(d)}
+            onDelete={() => handleDelete(d.id)}
+          />
+        ))
       )}
 
-      {/* ── Modal ────────────────────────────────────────── */}
+      {/* ── Modals ───────────────────────────────────────── */}
       {showAdd && (
-        <AddDocumentModal
+        <DocumentModal
           nomFichierPrefill={prefillNom}
           onClose={() => { setShowAdd(false); setPrefillNom("") }}
-          onSave={d => {
-            setDocuments(prev => [d, ...prev])
-            if (filterBien && filterBien !== d.bien_id) setFilterBien("")
-            if (filterCat  && filterCat  !== d.categorie) setFilterCat("")
-          }}
+          onSave={handleSaveAdd}
+        />
+      )}
+      {editItem && (
+        <DocumentModal
+          initialValues={editItem}
+          onClose={() => setEditItem(null)}
+          onSave={handleSaveEdit}
         />
       )}
     </>
