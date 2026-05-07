@@ -14,8 +14,8 @@ const euro = (n: number) => n.toLocaleString("fr-FR", { style: "currency", curre
 
 type TypeBien      = "appartement" | "maison" | "garage" | "local" | "autre"
 type Statut        = "loue" | "vacant"
-type ModeDetention = "nom-propre" | "indivision" | "sci-ir" | "sci-is" | "sarl-famille" | "sas" | "holding" | "autre"
-type RegimeFiscal  = "foncier-micro" | "foncier-reel" | "lmnp-micro" | "lmnp-reel" | "lmp" | "is" | "autre"
+type ModeDetention = "nom-propre" | "indivision" | "sci" | "sarl-famille" | "sas" | "holding" | "autre"
+type RegimeFiscal  = "ir-foncier-reel" | "ir-foncier-micro" | "ir-lmnp-reel" | "ir-lmnp-micro" | "ir-lmp" | "is" | "autre"
 
 interface BienSimple {
   kind: "simple"
@@ -48,23 +48,22 @@ const TYPE_EMOJI: Record<TypeBien, string> = {
   appartement: "🏠", maison: "🏡", garage: "🅿️", local: "🏪", autre: "🏗",
 }
 const MODE_DETENTION_LABELS: Record<ModeDetention, string> = {
-  "nom-propre":    "Nom propre",
-  "indivision":    "Indivision",
-  "sci-ir":        "SCI à l'IR",
-  "sci-is":        "SCI à l'IS",
-  "sarl-famille":  "SARL de famille",
-  "sas":           "SAS",
-  "holding":       "Holding",
-  "autre":         "Autre",
+  "nom-propre":   "Nom propre",
+  "indivision":   "Indivision",
+  "sci":          "SCI",
+  "sarl-famille": "SARL de famille",
+  "sas":          "SAS",
+  "holding":      "Holding",
+  "autre":        "Autre",
 }
 const REGIME_FISCAL_LABELS: Record<RegimeFiscal, string> = {
-  "foncier-micro": "Revenus fonciers — micro",
-  "foncier-reel":  "Revenus fonciers — réel",
-  "lmnp-micro":    "LMNP micro-BIC",
-  "lmnp-reel":     "LMNP réel",
-  "lmp":           "LMP",
-  "is":            "IS",
-  "autre":         "Autre",
+  "ir-foncier-reel":  "IR — foncier réel",
+  "ir-foncier-micro": "IR — micro-foncier",
+  "ir-lmnp-reel":     "IR — LMNP réel",
+  "ir-lmnp-micro":    "IR — micro-BIC",
+  "ir-lmp":           "IR — LMP",
+  "is":               "IS",
+  "autre":            "Autre",
 }
 
 // ── Mapping DB → types locaux ──────────────────────────────
@@ -73,17 +72,31 @@ function parseMeta(row: any): Record<string, string> {
   try { return JSON.parse(row.notes || "{}") } catch { return {} }
 }
 
-function parseRegimeFiscal(v: string): RegimeFiscal {
-  // compatibilité avec les anciennes valeurs stockées
-  const compat: Record<string, RegimeFiscal> = {
-    "micro-foncier": "foncier-micro",
-    "reel":          "foncier-reel",
-    "LMNP-micro":    "lmnp-micro",
-    "LMNP-reel":     "lmnp-reel",
+function parseModeDetention(v: string): ModeDetention {
+  const compat: Record<string, ModeDetention> = {
+    "sci-ir": "sci",
+    "sci-is": "sci",
   }
-  const valid: RegimeFiscal[] = ["foncier-micro","foncier-reel","lmnp-micro","lmnp-reel","lmp","is","autre"]
+  const valid: ModeDetention[] = ["nom-propre","indivision","sci","sarl-famille","sas","holding","autre"]
+  if (valid.includes(v as ModeDetention)) return v as ModeDetention
+  return compat[v] ?? "nom-propre"
+}
+
+function parseRegimeFiscal(v: string): RegimeFiscal {
+  const compat: Record<string, RegimeFiscal> = {
+    "micro-foncier":  "ir-foncier-micro",
+    "reel":           "ir-foncier-reel",
+    "LMNP-micro":     "ir-lmnp-micro",
+    "LMNP-reel":      "ir-lmnp-reel",
+    "lmp":            "ir-lmp",
+    "foncier-micro":  "ir-foncier-micro",
+    "foncier-reel":   "ir-foncier-reel",
+    "lmnp-micro":     "ir-lmnp-micro",
+    "lmnp-reel":      "ir-lmnp-reel",
+  }
+  const valid: RegimeFiscal[] = ["ir-foncier-reel","ir-foncier-micro","ir-lmnp-reel","ir-lmnp-micro","ir-lmp","is","autre"]
   if (valid.includes(v as RegimeFiscal)) return v as RegimeFiscal
-  return compat[v] ?? "foncier-micro"
+  return compat[v] ?? "ir-foncier-micro"
 }
 
 function rowToSimple(row: any): BienSimple {
@@ -92,8 +105,8 @@ function rowToSimple(row: any): BienSimple {
     kind: "simple",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
     type: (row.type ?? "appartement") as TypeBien,
-    mode_detention: (meta.mode_detention ?? "nom-propre") as ModeDetention,
-    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-micro"),
+    mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
+    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "ir-foncier-micro"),
     statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
   }
 }
@@ -103,8 +116,8 @@ function rowToImmeuble(row: any, lots: Lot[]): Immeuble {
   return {
     kind: "immeuble",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
-    mode_detention: (meta.mode_detention ?? "nom-propre") as ModeDetention,
-    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-reel"),
+    mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
+    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "ir-foncier-reel"),
     lots,
   }
 }
@@ -524,8 +537,7 @@ function ModeDetentionOptions() {
   return <>
     <option value="nom-propre">Nom propre</option>
     <option value="indivision">Indivision</option>
-    <option value="sci-ir">SCI à l'IR</option>
-    <option value="sci-is">SCI à l'IS</option>
+    <option value="sci">SCI</option>
     <option value="sarl-famille">SARL de famille</option>
     <option value="sas">SAS</option>
     <option value="holding">Holding</option>
@@ -535,18 +547,18 @@ function ModeDetentionOptions() {
 
 function RegimeFiscalOptions() {
   return <>
-    <option value="foncier-micro">Revenus fonciers — micro</option>
-    <option value="foncier-reel">Revenus fonciers — réel</option>
-    <option value="lmnp-micro">LMNP micro-BIC</option>
-    <option value="lmnp-reel">LMNP réel</option>
-    <option value="lmp">LMP</option>
+    <option value="ir-foncier-reel">IR — foncier réel</option>
+    <option value="ir-foncier-micro">IR — micro-foncier</option>
+    <option value="ir-lmnp-reel">IR — LMNP réel</option>
+    <option value="ir-lmnp-micro">IR — micro-BIC</option>
+    <option value="ir-lmp">IR — LMP</option>
     <option value="is">IS</option>
     <option value="autre">Autre</option>
   </>
 }
 
 function AddBienSimpleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", type:"appartement", mode_detention:"nom-propre", regime_fiscal:"foncier-micro" })
+  const [f, setF] = useState({ nom:"", adresse:"", type:"appartement", mode_detention:"nom-propre", regime_fiscal:"ir-foncier-reel" })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   return (
     <Modal title="Nouveau bien simple" onClose={onClose}>
@@ -561,7 +573,7 @@ function AddBienSimpleModal({ onClose, onSave }: { onClose: () => void; onSave: 
 }
 
 function AddImmeubleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", mode_detention:"nom-propre", regime_fiscal:"foncier-reel" })
+  const [f, setF] = useState({ nom:"", adresse:"", mode_detention:"nom-propre", regime_fiscal:"ir-foncier-reel" })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   return (
     <Modal title="Nouvel immeuble" onClose={onClose}>
