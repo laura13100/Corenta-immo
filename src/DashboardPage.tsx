@@ -37,6 +37,13 @@ interface RawLocataire {
   id: string; bien_id: string; lot_id: string | null
   statut: string; date_sortie: string | null
 }
+interface RawCredit {
+  id: string; bien_id: string; lot_id: string | null
+  banque: string; statut: string
+  mensualite_hors_assurance: number; assurance_mensuelle: number
+  capital_rembourse_mensuel: number; interets_mensuels: number
+  capital_restant_du: number
+}
 
 interface Alert { label: string; days: number; urgent: boolean }
 
@@ -61,6 +68,9 @@ interface BienStat {
   // ── Rentabilité ──
   rentaBrute: number  // loyers annualisés / valeurAchat × 100
   rentaNette: number  // (loyers - depDeductibles) annualisés / valeurAchat × 100
+  // ── Crédits ──
+  mensualiteCredit: number   // mensualité totale (hors + assurance) des crédits actifs
+  detteRestante:   number    // capital_restant_du total des crédits actifs
   // ── Occupation ──
   lotsActifs: number; lotsTotal: number; tauxOccupation: number
   alerts: Alert[]
@@ -75,6 +85,8 @@ interface GlobalStat {
   capitalRembourse: number; enrichissement: number
   rentaBrute: number
   locsActifs: number; lotsTotal: number; tauxOccupation: number
+  mensualiteCredit: number
+  detteRestante:   number
   biens: BienStat[]
 }
 
@@ -136,7 +148,7 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
 
   async function load() {
     setLoading(true)
-    const [bienRes, lotRes, recRes, depRes, locRes] = await Promise.all([
+    const [bienRes, lotRes, recRes, depRes, locRes, creditRes] = await Promise.all([
       supabase.from("biens").select("id, nom, adresse, type, notes").order("nom"),
       supabase.from("lots").select("id, bien_id, nom"),
       supabase.from("recettes")
@@ -148,13 +160,17 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         .gte("date_depense", `${an}-01-01`)
         .lte("date_depense", `${an}-12-31`),
       supabase.from("locataires").select("id, bien_id, lot_id, statut, date_sortie"),
+      supabase.from("credits")
+        .select("id, bien_id, lot_id, banque, statut, mensualite_hors_assurance, assurance_mensuelle, capital_rembourse_mensuel, interets_mensuels, capital_restant_du")
+        .eq("statut", "actif"),
     ])
 
-    const rawBiens = (bienRes.data ?? []) as RawBien[]
-    const rawLots  = (lotRes.data  ?? []) as RawLot[]
-    const rawRec   = (recRes.data  ?? []) as RawRecette[]
-    const rawDep   = (depRes.data  ?? []) as RawDepense[]
-    const rawLoc   = (locRes.data  ?? []) as RawLocataire[]
+    const rawBiens   = (bienRes.data   ?? []) as RawBien[]
+    const rawLots    = (lotRes.data    ?? []) as RawLot[]
+    const rawRec     = (recRes.data    ?? []) as RawRecette[]
+    const rawDep     = (depRes.data    ?? []) as RawDepense[]
+    const rawLoc     = (locRes.data    ?? []) as RawLocataire[]
+    const rawCredits = (creditRes.data ?? []) as RawCredit[]
 
     const me = moisEcoules(an)
 
@@ -186,9 +202,10 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
       const lots   = lotsByBien.get(b.id) ?? []
       const nbLots = lots.length
 
-      const bRec = rawRec.filter(r => r.bien_id === b.id)
-      const bDep = rawDep.filter(d => d.bien_id === b.id)
-      const bLoc = rawLoc.filter(l => l.bien_id === b.id)
+      const bRec     = rawRec.filter(r => r.bien_id === b.id)
+      const bDep     = rawDep.filter(d => d.bien_id === b.id)
+      const bLoc     = rawLoc.filter(l => l.bien_id === b.id)
+      const bCredits = rawCredits.filter(c => c.bien_id === b.id)
 
       // Revenus : tout sauf dépôt de garantie (liability, pas un revenu)
       const revAnnuel = bRec
@@ -245,6 +262,10 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
       }
       const tauxOccupation = lotsActifs / lotsTotal * 100
 
+      // ── Crédits actifs liés à ce bien ─────────────────────────────────
+      const mensualiteCredit = bCredits.reduce((s, c) => s + Number(c.mensualite_hors_assurance) + Number(c.assurance_mensuelle), 0)
+      const detteRestante    = bCredits.reduce((s, c) => s + Number(c.capital_restant_du), 0)
+
       return {
         id: b.id, nom: b.nom, adresse: b.adresse, type: b.type,
         modeDetention:   meta.mode_detention   ?? "",
@@ -256,6 +277,7 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         cashflow, cashflowMensuel, enrichissement,
         rentaBrute, rentaNette,
         lotsActifs, lotsTotal, tauxOccupation,
+        mensualiteCredit, detteRestante,
         alerts: alertsByBien.get(b.id) ?? [],
       }
     })
@@ -271,6 +293,8 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
     const locsActifsG      = bienStats.reduce((s, b) => s + b.lotsActifs, 0)
     const lotsTotalG       = bienStats.reduce((s, b) => s + b.lotsTotal, 0)
     const tauxOccG         = lotsTotalG > 0 ? locsActifsG / lotsTotalG * 100 : 0
+    const mensualiteCreditG = bienStats.reduce((s, b) => s + b.mensualiteCredit, 0)
+    const detteRestanteG    = bienStats.reduce((s, b) => s + b.detteRestante, 0)
 
     setStats({
       nbBiens:          rawBiens.length,
@@ -284,6 +308,8 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
       locsActifs:       locsActifsG,
       lotsTotal:        lotsTotalG,
       tauxOccupation:   tauxOccG,
+      mensualiteCredit: mensualiteCreditG,
+      detteRestante:    detteRestanteG,
       biens: bienStats,
     })
     setLoading(false)
@@ -370,6 +396,26 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         </div>
       )}
 
+      {/* ── Synthèse crédits (si au moins un crédit actif) ── */}
+      {stats.mensualiteCredit > 0 && (
+        <div style={{ background:C.bp, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:14 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:C.bl, textTransform:"uppercase", letterSpacing:".06em", marginBottom:8 }}>
+            🏦 Crédits actifs — portefeuille
+          </div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+            <div>
+              <div style={{ fontSize:10, color:C.tm, textTransform:"uppercase" }}>Mensualité totale</div>
+              <div style={{ fontSize:16, fontWeight:900, color:C.bl }}>{euro(stats.mensualiteCredit)}</div>
+              <div style={{ fontSize:10, color:C.tm }}>/ mois</div>
+            </div>
+            <div>
+              <div style={{ fontSize:10, color:C.tm, textTransform:"uppercase" }}>Dette restante</div>
+              <div style={{ fontSize:16, fontWeight:900, color:C.bl }}>{euro(stats.detteRestante)}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── État vide ─────────────────────────────────────── */}
       {biens.length === 0 && (
         <div style={{ background:C.wh, borderRadius:14, padding:"56px 20px", textAlign:"center", border:`1px solid ${C.br}` }}>
@@ -449,18 +495,38 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
               <MiniStat label="Enrichissement (an)"  value={(b.enrichissement >= 0 ? "+" : "") + euro(b.enrichissement)}          color={b.enrichissement >= 0 ? C.g : C.rd} />
             </div>
 
-            {/* Détail crédit (si données) */}
-            {(b.interets > 0 || b.capitalRembourse > 0) && (
-              <div style={{ background:C.bp, borderRadius:8, padding:"8px 12px", marginBottom:10, display:"flex", gap:12, flexWrap:"wrap" }}>
-                <div style={{ fontSize:11, color:C.bl }}>
-                  <span style={{ color:C.tm }}>Intérêts : </span>
-                  <strong>{euro(b.interets)}</strong>
-                  <span style={{ color:C.tm }}> (charge)</span>
-                </div>
-                <div style={{ fontSize:11, color:C.bl }}>
-                  <span style={{ color:C.tm }}>Capital : </span>
-                  <strong>{euro(b.capitalRembourse)}</strong>
-                  <span style={{ color:C.tm }}> (patrimoine)</span>
+            {/* Détail crédit (via dépenses saisies OU crédit actif) */}
+            {(b.interets > 0 || b.capitalRembourse > 0 || b.mensualiteCredit > 0) && (
+              <div style={{ background:C.bp, borderRadius:8, padding:"8px 12px", marginBottom:10 }}>
+                <div style={{ fontSize:10, fontWeight:700, color:C.bl, textTransform:"uppercase", letterSpacing:".06em", marginBottom:6 }}>🏦 Crédit</div>
+                <div style={{ display:"flex", gap:12, flexWrap:"wrap" }}>
+                  {b.mensualiteCredit > 0 && (
+                    <div style={{ fontSize:11, color:C.bl }}>
+                      <span style={{ color:C.tm }}>Mensualité : </span>
+                      <strong>{euro(b.mensualiteCredit)}</strong>
+                      <span style={{ color:C.tm }}> /mois</span>
+                    </div>
+                  )}
+                  {b.interets > 0 && (
+                    <div style={{ fontSize:11, color:C.bl }}>
+                      <span style={{ color:C.tm }}>Intérêts : </span>
+                      <strong>{euro(b.interets)}</strong>
+                      <span style={{ color:C.tm }}> (charge)</span>
+                    </div>
+                  )}
+                  {b.capitalRembourse > 0 && (
+                    <div style={{ fontSize:11, color:C.bl }}>
+                      <span style={{ color:C.tm }}>Capital : </span>
+                      <strong>{euro(b.capitalRembourse)}</strong>
+                      <span style={{ color:C.tm }}> (patrimoine)</span>
+                    </div>
+                  )}
+                  {b.detteRestante > 0 && (
+                    <div style={{ fontSize:11, color:C.bl }}>
+                      <span style={{ color:C.tm }}>Dette restante : </span>
+                      <strong>{euro(b.detteRestante)}</strong>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

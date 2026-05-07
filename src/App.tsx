@@ -6,6 +6,7 @@ import DepensesPage from "./DepensesPage";
 import DocumentsPage from "./DocumentsPage";
 import BilanPage from "./BilanPage";
 import DashboardPage from "./DashboardPage";
+import CreditsPage from "./CreditsPage";
 import AuthPage from "./AuthPage";
 import { supabase } from "./supabase";
 
@@ -316,7 +317,7 @@ export default function App(){
 
       {/* NAV */}
       <div className="nav-scroll" style={{background:C.wh,borderBottom:`2px solid ${C.br}`,display:"flex",gap:2,padding:"8px 14px 0",overflowX:"auto"}}>
-        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],["documents","📂 Documents"],["bilan","📊 Bilan fiscal"]].map(([k,l])=>(
+        {[["dash","🏘 Tableau de bord"],["biens","🏠 Mes biens"],["recettes","💰 Recettes"],["depenses","📉 Dépenses"],["credits","🏦 Crédits"],["documents","📂 Documents"],["bilan","📊 Bilan fiscal"]].map(([k,l])=>(
           <button key={k} onClick={()=>setPage(k)} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page===k?C.g:"transparent",color:page===k?"#fff":C.g}}>{l}</button>
         ))}
         {(bien||lot)&&<div style={{width:1,background:C.br,margin:"8px 6px 2px",flexShrink:0}}/>}
@@ -339,6 +340,9 @@ export default function App(){
 
         {/* ══ PAGE DÉPENSES ══ */}
         {page==="depenses"&&<DepensesPage/>}
+
+        {/* ══ PAGE CRÉDITS ══ */}
+        {page==="credits"&&<CreditsPage/>}
 
         {/* ══ PAGE DOCUMENTS ══ */}
         {page==="documents"&&<DocumentsPage/>}
