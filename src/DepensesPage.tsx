@@ -27,7 +27,7 @@ type CategorieDep =
   | "abonnement_elec" | "abonnement_internet" | "abonnement_eau" | "abonnement_gaz"
   | "taxe_fonciere" | "taxe_habitation" | "taxe_sejour" | "cfe" | "charges_sociales"
   | "divers" | "petits_travaux" | "petit_mobilier"
-  | "interets_emprunt" | "amortissement"
+  | "interets_emprunt" | "capital_rembourse"
   | "autre"
 
 interface CatInfo { label: string; emoji: string; bg: string; color: string; ded: boolean }
@@ -56,7 +56,7 @@ const CAT_CONFIG: Record<CategorieDep, CatInfo> = {
   petits_travaux:       { label:"Petits travaux < 600 €",    emoji:"🔧", bg:C.op,  color:C.or, ded:true  },
   petit_mobilier:       { label:"Petit mobilier < 600 €",    emoji:"🪑", bg:C.op,  color:C.or, ded:true  },
   interets_emprunt:     { label:"Intérêts d'emprunt",        emoji:"🏦", bg:C.cr2, color:C.tm, ded:true  },
-  amortissement:        { label:"Amortissement",             emoji:"📉", bg:C.cr2, color:C.tm, ded:true  },
+  capital_rembourse:    { label:"Capital remboursé",         emoji:"🔄", bg:C.bp,  color:C.bl, ded:false },
   autre:                { label:"Autre",                     emoji:"📄", bg:C.cr2, color:C.tm, ded:true  },
 }
 
@@ -68,7 +68,7 @@ const CAT_GROUPS: CatGroup[] = [
   { id:"abonnement", label:"Abonnements",                emoji:"⚡", color:C.gd, bg:C.dp,  cats:["abonnement_elec","abonnement_internet","abonnement_eau","abonnement_gaz"] },
   { id:"taxes",      label:"Taxes & prélèvements",       emoji:"🏛️", color:C.gd, bg:C.dp,  cats:["taxe_fonciere","taxe_habitation","taxe_sejour","cfe","charges_sociales"] },
   { id:"travaux",    label:"Travaux & mobilier",         emoji:"🔧", color:C.or, bg:C.op,  cats:["petits_travaux","petit_mobilier"] },
-  { id:"emprunt",    label:"Emprunt & financement",      emoji:"🏦", color:C.tm, bg:C.cr2, cats:["interets_emprunt","amortissement"] },
+  { id:"emprunt",    label:"Emprunt & financement",      emoji:"🏦", color:C.bl, bg:C.bp,  cats:["interets_emprunt","capital_rembourse"] },
   { id:"autre",      label:"Autres dépenses",            emoji:"📌", color:C.tm, bg:C.cr2, cats:["divers","autre"] },
 ]
 

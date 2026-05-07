@@ -50,7 +50,7 @@ interface BienStat {
   depDeductibles: number // dépenses marquées déductibles
   // ── Séparation crédit ──
   interets: number       // catégorie "interets_emprunt" → charge réelle
-  capitalRembourse: number // catégorie "amortissement" → enrichissement patrimonial
+  capitalRembourse: number // catégorie "capital_rembourse" → enrichissement patrimonial
   // ── KPI dérivés ──
   // cash-flow = revAnnuel - depAnnuel
   // enrichissement = cashflow + capitalRembourse
@@ -208,11 +208,12 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         .filter(d => d.categorie === "interets_emprunt")
         .reduce((s, d) => s + Number(d.montant), 0)
 
-      // Capital remboursé (catégorie "amortissement") :
+      // Capital remboursé (catégorie "capital_rembourse") :
       // cash sorti → réduit le cash-flow
       // mais enrichit le patrimoine → on le rajoute dans l'enrichissement
+      // ≠ amortissement_comptable (non-cash, LMNP/IS) — prévu phase 2
       const capitalRembourse = bDep
-        .filter(d => d.categorie === "amortissement")
+        .filter(d => d.categorie === "capital_rembourse")
         .reduce((s, d) => s + Number(d.montant), 0)
 
       // cash-flow = revenus - toutes dépenses cash (mensualités incluses)

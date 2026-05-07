@@ -57,7 +57,7 @@ const BILAN_GROUPES = [
   { key:"abonnement", label:"Abonnements",               emoji:"⚡" },
   { key:"taxes",      label:"Taxes & prélèvements",      emoji:"🏛️" },
   { key:"travaux",    label:"Travaux & mobilier",        emoji:"🔧" },
-  { key:"emprunt",    label:"Intérêts & amortissement",  emoji:"🏦" },
+  { key:"emprunt",    label:"Intérêts d'emprunt",        emoji:"🏦" },
   { key:"autre",      label:"Autres dépenses",           emoji:"📌" },
 ]
 
@@ -81,7 +81,7 @@ const BILAN: Record<number, AnnualData> = {
       abonnement: { label:"Abonnements",               emoji:"⚡", montant:   90 },
       taxes:      { label:"Taxes & prélèvements",      emoji:"🏛️", montant:2_130 },
       travaux:    { label:"Travaux & mobilier",        emoji:"🔧", montant:1_650 },
-      emprunt:    { label:"Intérêts & amortissement",  emoji:"🏦", montant:  335 },
+      emprunt:    { label:"Intérêts d'emprunt",        emoji:"🏦", montant:  335 },
       autre:      { label:"Autres dépenses",           emoji:"📌", montant:   95 },
     },
     biensDetail: [
@@ -108,7 +108,7 @@ const BILAN: Record<number, AnnualData> = {
       abonnement: { label:"Abonnements",               emoji:"⚡", montant:  216 },
       taxes:      { label:"Taxes & prélèvements",      emoji:"🏛️", montant:2_130 },
       travaux:    { label:"Travaux & mobilier",        emoji:"🔧", montant:3_200 },
-      emprunt:    { label:"Intérêts & amortissement",  emoji:"🏦", montant:2_404 },
+      emprunt:    { label:"Intérêts d'emprunt",        emoji:"🏦", montant:2_404 },
       autre:      { label:"Autres dépenses",           emoji:"📌", montant:  406 },
     },
     biensDetail: [
