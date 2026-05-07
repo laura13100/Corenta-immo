@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react"
 import { supabase } from "./supabase"
+import { AddBienModal, AddBienFormData } from "./AddBienModal"
 
 const C = {
   g:   "#2d5b3d", gl:  "#3d7a52", gp:  "#e6efe9",
@@ -557,20 +558,6 @@ function RegimeFiscalOptions() {
   </>
 }
 
-function AddBienSimpleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", type:"appartement", mode_detention:"nom-propre", regime_fiscal:"ir-foncier-reel" })
-  const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
-  return (
-    <Modal title="Nouveau bien simple" onClose={onClose}>
-      <FieldInput label="Nom *" placeholder="Ex. Appartement Gambetta" value={f.nom} onChange={set("nom")} />
-      <FieldInput label="Adresse" placeholder="12 rue de la Paix, 69001 Lyon" value={f.adresse} onChange={set("adresse")} />
-      <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
-      <FieldSelect label="Mode de détention" value={f.mode_detention} onChange={set("mode_detention")}><ModeDetentionOptions /></FieldSelect>
-      <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
-      <SaveBtn label="Enregistrer" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
-    </Modal>
-  )
-}
 
 function AddImmeubleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
   const [f, setF] = useState({ nom:"", adresse:"", mode_detention:"nom-propre", regime_fiscal:"ir-foncier-reel" })
@@ -649,12 +636,33 @@ export default function BiensPage() {
     setBiens(result)
   }
 
-  async function handleAddSimple(f: any) {
+  function mapTypeBien(t: string): TypeBien {
+    const m: Record<string, TypeBien> = {
+      "Appartement": "appartement", "Maison": "maison",
+      "Garage / Cave": "garage", "Local commercial": "local",
+    }
+    return m[t] ?? "autre"
+  }
+
+  async function handleAddSimple(f: AddBienFormData) {
     if (!userId) { setDbError("Utilisateur non connecté."); return }
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, type: f.type, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ mode_detention: f.mode_detention }) })
+      .insert({
+        owner_id: userId,
+        nom: f.nom.trim(),
+        adresse: f.adresse.trim() || null,
+        type: mapTypeBien(f.type),
+        regime_fiscal: f.regime_fiscal,
+        notes: JSON.stringify({
+          mode_detention: f.mode_detention,
+          valeurAchat: f.valeurAchat || null,
+          surface: f.surface || null,
+          anneeAcquisition: f.anneeAcquisition || null,
+          notes_text: f.notes || null,
+        }),
+      })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToSimple(data)])
@@ -801,7 +809,7 @@ export default function BiensPage() {
       )}
 
       {/* Modals */}
-      {showAdd === "simple"   && <AddBienSimpleModal onClose={() => setShowAdd(null)} onSave={handleAddSimple} />}
+      {showAdd === "simple"   && <AddBienModal onClose={() => setShowAdd(null)} onSave={handleAddSimple} />}
       {showAdd === "immeuble" && <AddImmeubleModal   onClose={() => setShowAdd(null)} onSave={handleAddImmeuble} />}
       {addLotFor && !selected && (() => {
         const imm = immeubles.find(b => b.id === addLotFor)

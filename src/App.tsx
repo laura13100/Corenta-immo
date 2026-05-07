@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { AddBienModal, AddBienFormData, MODE_DETENTION_LABELS, REGIME_FISCAL_LABELS } from "./AddBienModal";
 import BiensPage from "./BiensPage";
 import RecettesPage from "./RecettesPage";
 import DepensesPage from "./DepensesPage";
@@ -129,6 +130,7 @@ export default function App(){
   const [toast,setToast]=useState(null);
   const [modal,setModal]=useState(null);
   const [form,setForm]=useState({});
+  const [showAddBien,setShowAddBien]=useState(false);
   const [user,setUser]=useState(null);
   const [authChecking,setAuthChecking]=useState(true);
 
@@ -176,6 +178,24 @@ export default function App(){
       toast_(`Bien « ${nb.nom} » ajouté`);
     }
     closeM();
+  }
+
+  function handleAddBien(f: AddBienFormData){
+    const nb={
+      id:uid(),
+      nom:f.nom.trim(),
+      adresse:f.adresse||null,
+      type:f.type,
+      mode_detention:f.mode_detention,
+      regime_fiscal:f.regime_fiscal,
+      valeurAchat:parseFloat(f.valeurAchat)||0,
+      surface:f.surface?parseFloat(f.surface):null,
+      anneeAcquisition:f.anneeAcquisition||null,
+      notes:f.notes||null,
+    };
+    setData(d=>({...d,biens:[...d.biens,nb]}));
+    toast_(`Bien « ${nb.nom} » ajouté`);
+    setShowAddBien(false);
   }
 
   function saveLot(){
@@ -286,7 +306,7 @@ export default function App(){
         {bien&&<button onClick={()=>{setPage("bien");setLotId(null);setSub(isImm?"lots":"apercu");}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="bien"?C.g:C.gp,color:page==="bien"?"#fff":C.gl}}>🏠 {bien.nom}</button>}
         {lot&&<button onClick={()=>setPage("lot")} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="lot"?C.g:C.gp,color:page==="lot"?"#fff":C.gl}}>{LOT_MAP[lot.typeLot]?.emoji||""} {lot.nom}</button>}
         <div style={{flex:1}}/>
-        {page==="dash"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>openM("addBien",{type:TYPES_BIEN[0],regime:REGIMES[0]})}>+ Nouveau bien</Btn>}
+        {page==="dash"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>setShowAddBien(true)}>+ Nouveau bien</Btn>}
         {page==="bien"&&isImm&&sub==="lots"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>openM("addLot",{typeLot:"meuble"})}>+ Nouveau lot</Btn>}
       </div>
 
@@ -309,7 +329,7 @@ export default function App(){
                 <div style={{fontSize:48,marginBottom:12}}>🏡</div>
                 <div style={{fontWeight:700,fontSize:17,marginBottom:6}}>Aucun bien enregistré</div>
                 <div style={{color:C.tm,fontSize:13,marginBottom:20}}>Ajoutez un bien simple ou un immeuble multi-lots.</div>
-                <Btn onClick={()=>openM("addBien",{type:TYPES_BIEN[0],regime:REGIMES[0]})}>+ Ajouter un bien</Btn>
+                <Btn onClick={()=>setShowAddBien(true)}>+ Ajouter un bien</Btn>
               </Card>
             ):data.biens.map(b=>{
               const txB=data.transactions.filter(t=>t.bienId===b.id&&String(t.date).startsWith(String(an)));
@@ -546,7 +566,17 @@ export default function App(){
                     <Btn v="dan" sx={{fontSize:12}} onClick={()=>{if(window.confirm("Supprimer ce bien et toutes ses données ?"))delBien(bienId);}}>Supprimer</Btn>
                   </div>
                 </div>
-                {[["Adresse",bien.adresse],["Type",bien.type],["Régime fiscal",bien.regime],["Valeur d'achat",bien.valeurAchat?euro(bien.valeurAchat):null],["Surface",bien.surface?`${bien.surface} m²`:null],["Acquisition",bien.anneeAcquisition],isImm&&["Nb de lots",lotsB.length],["Notes",bien.notes]].filter(Boolean).map(([k,v])=>v?<KV key={k} k={k} v={String(v)}/>:null)}
+                {[
+                  ["Adresse",bien.adresse],
+                  ["Type",bien.type],
+                  ["Structure",bien.mode_detention?MODE_DETENTION_LABELS[bien.mode_detention]??bien.mode_detention:null],
+                  ["Régime fiscal",bien.regime_fiscal?REGIME_FISCAL_LABELS[bien.regime_fiscal]??bien.regime_fiscal:bien.regime||null],
+                  ["Valeur d'achat",bien.valeurAchat?euro(bien.valeurAchat):null],
+                  ["Surface",bien.surface?`${bien.surface} m²`:null],
+                  ["Acquisition",bien.anneeAcquisition],
+                  isImm&&["Nb de lots",lotsB.length],
+                  ["Notes",bien.notes],
+                ].filter(Boolean).map(([k,v])=>v?<KV key={k} k={k} v={String(v)}/>:null)}
               </Card>
             )}
           </>
@@ -649,19 +679,15 @@ export default function App(){
           <div onClick={e=>e.stopPropagation()} style={{background:C.wh,borderRadius:"18px 18px 0 0",padding:"24px 20px 36px",width:"100%",maxWidth:540,maxHeight:"90vh",overflowY:"auto",animation:"fu .22s"}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:18}}>
               <div style={{fontWeight:800,fontSize:17,color:C.g}}>
-                {{addBien:"Nouveau bien",editBien:"Modifier le bien",addLot:"Nouveau lot",editLot:"Modifier le lot",addTx:form.id?(form.sens==="revenu"?"Modifier le revenu":"Modifier la charge"):(form.sens==="revenu"?"Enregistrer un revenu":"Enregistrer une charge"),addLoc:"Ajouter un locataire"}[modal]}
+                {{editBien:"Modifier le bien",addLot:"Nouveau lot",editLot:"Modifier le lot",addTx:form.id?(form.sens==="revenu"?"Modifier le revenu":"Modifier la charge"):(form.sens==="revenu"?"Enregistrer un revenu":"Enregistrer une charge"),addLoc:"Ajouter un locataire"}[modal]}
               </div>
               <button onClick={closeM} style={{background:"none",border:"none",fontSize:20,cursor:"pointer",color:C.tm}}>✕</button>
             </div>
 
-            {(modal==="addBien"||modal==="editBien")&&<>
+            {modal==="editBien"&&<>
               <Inp label="Nom *" placeholder="ex. Immeuble Manosque, Appt Aix…" value={form.nom||""} onChange={e=>sf("nom",e.target.value)}/>
               <Inp label="Adresse" placeholder="Adresse complète" value={form.adresse||""} onChange={e=>sf("adresse",e.target.value)}/>
               <Slc label="Type" value={form.type||TYPES_BIEN[0]} onChange={e=>sf("type",e.target.value)}>{TYPES_BIEN.map(t=><option key={t}>{t}</option>)}</Slc>
-              {form.type!=="Immeuble (multi-lots)"
-                ? <Slc label="Régime fiscal" value={form.regime||REGIMES[0]} onChange={e=>sf("regime",e.target.value)}>{REGIMES.map(t=><option key={t}>{t}</option>)}</Slc>
-                : <Slc label="Régime fiscal (immeuble)" value={form.regime||REGIMES[0]} onChange={e=>sf("regime",e.target.value)}>{REGIMES.map(t=><option key={t}>{t}</option>)}</Slc>
-              }
               <Inp label="Valeur d'achat (€)" type="number" placeholder="350000" value={form.valeurAchat||""} onChange={e=>sf("valeurAchat",e.target.value)}/>
               <Inp label="Surface totale (m²)" type="number" placeholder="120" value={form.surface||""} onChange={e=>sf("surface",e.target.value)}/>
               <Inp label="Année d'acquisition" type="number" placeholder="2022" value={form.anneeAcquisition||""} onChange={e=>sf("anneeAcquisition",e.target.value)}/>
@@ -788,6 +814,8 @@ export default function App(){
           </div>
         </div>
       )}
+
+      {showAddBien&&<AddBienModal onClose={()=>setShowAddBien(false)} onSave={handleAddBien}/>}
 
       {toast&&<div style={{position:"fixed",bottom:24,left:"50%",transform:"translateX(-50%)",background:toast.t==="err"?C.rd:C.g,color:"#fff",padding:"11px 22px",borderRadius:12,fontWeight:700,fontSize:14,boxShadow:"0 4px 20px rgba(0,0,0,.18)",zIndex:9999,animation:"ti .2s",whiteSpace:"nowrap"}}>{toast.msg}</div>}
     </div>
