@@ -50,27 +50,39 @@ interface AnnualData {
   biensDetail: BienBilan[]
 }
 
+// ── Groupes fiscaux de référence (toujours affichés) ──────
+const BILAN_GROUPES = [
+  { key:"gestion",    label:"Frais de gestion & admin.", emoji:"📋" },
+  { key:"assurance",  label:"Assurances",                emoji:"🛡️" },
+  { key:"abonnement", label:"Abonnements",               emoji:"⚡" },
+  { key:"taxes",      label:"Taxes & prélèvements",      emoji:"🏛️" },
+  { key:"travaux",    label:"Travaux & mobilier",        emoji:"🔧" },
+  { key:"emprunt",    label:"Intérêts & amortissement",  emoji:"🏦" },
+  { key:"autre",      label:"Autres dépenses",           emoji:"📌" },
+]
+
 // ── Données calculées depuis les mocks RecettesPage/DepensesPage ───
 const BILAN: Record<number, AnnualData> = {
   2026: {
-    mois: 5,   // janvier → mai uniquement (données fictives partielles)
+    mois: 5,
     recettes:       9_370,
     deductibles:    5_241,
-    nonDeductibles: 6_300,
-    resultat:       4_129,  // 9 370 − 5 241
+    nonDeductibles: 4_150,
+    resultat:       4_129,
     recettesParType: {
-      loyer:          { label: "Loyers",           montant: 7_950 },
-      charges:        { label: "Charges récup.",   montant:   650 },
-      depot_garantie: { label: "Dépôt garantie",   montant:   620 },
-      autre:          { label: "Autres revenus",   montant:   150 },
+      loyer:          { label:"Loyers",           montant:7_950 },
+      charges:        { label:"Charges récup.",   montant:  650 },
+      depot_garantie: { label:"Dépôt garantie",   montant:  620 },
+      autre:          { label:"Autres revenus",   montant:  150 },
     },
     depensesParCat: {
-      taxe_fonciere: { label: "Taxe foncière",     emoji: "🏛️", montant: 2_130 },
-      travaux:       { label: "Travaux",            emoji: "🔧", montant: 1_650 },
-      gestion:       { label: "Frais de gestion",  emoji: "📋", montant:   425 },
-      copropriete:   { label: "Charges copro",     emoji: "🏢", montant:   645 },
-      assurance:     { label: "Assurance",          emoji: "🛡️", montant:   296 },
-      autre:         { label: "Autres",             emoji: "📌", montant:    95 },
+      gestion:    { label:"Frais de gestion & admin.", emoji:"📋", montant:  645 },
+      assurance:  { label:"Assurances",                emoji:"🛡️", montant:  296 },
+      abonnement: { label:"Abonnements",               emoji:"⚡", montant:   90 },
+      taxes:      { label:"Taxes & prélèvements",      emoji:"🏛️", montant:2_130 },
+      travaux:    { label:"Travaux & mobilier",        emoji:"🔧", montant:1_650 },
+      emprunt:    { label:"Intérêts & amortissement",  emoji:"🏦", montant:  335 },
+      autre:      { label:"Autres dépenses",           emoji:"📌", montant:   95 },
     },
     biensDetail: [
       { id:"b1", nom:"Appartement Gambetta", regime:"LMNP Micro-BIC", recettes:4_800, deductibles:2_109, resultat: 2_691 },
@@ -83,21 +95,21 @@ const BILAN: Record<number, AnnualData> = {
     mois: 12,
     recettes:       20_760,
     deductibles:    11_820,
-    nonDeductibles: 15_480,
+    nonDeductibles: 12_960,
     resultat:        8_940,
     recettesParType: {
-      loyer:   { label: "Loyers",          montant: 18_720 },
-      charges: { label: "Charges récup.",  montant:  1_560 },
-      autre:   { label: "Autres revenus",  montant:    480 },
+      loyer:   { label:"Loyers",          montant:18_720 },
+      charges: { label:"Charges récup.",  montant: 1_560 },
+      autre:   { label:"Autres revenus",  montant:   480 },
     },
     depensesParCat: {
-      taxe_fonciere:    { label: "Taxe foncière",     emoji: "🏛️", montant: 2_130 },
-      travaux:          { label: "Travaux",            emoji: "🔧", montant: 3_200 },
-      interets_emprunt: { label: "Intérêts emprunt",  emoji: "🏦", montant: 3_000 },
-      copropriete:      { label: "Charges copro",     emoji: "🏢", montant: 1_380 },
-      gestion:          { label: "Frais de gestion",  emoji: "📋", montant: 1_020 },
-      assurance:        { label: "Assurance",          emoji: "🛡️", montant:   684 },
-      autre:            { label: "Autres",             emoji: "📌", montant:   406 },
+      gestion:    { label:"Frais de gestion & admin.", emoji:"📋", montant:2_780 },
+      assurance:  { label:"Assurances",                emoji:"🛡️", montant:  684 },
+      abonnement: { label:"Abonnements",               emoji:"⚡", montant:  216 },
+      taxes:      { label:"Taxes & prélèvements",      emoji:"🏛️", montant:2_130 },
+      travaux:    { label:"Travaux & mobilier",        emoji:"🔧", montant:3_200 },
+      emprunt:    { label:"Intérêts & amortissement",  emoji:"🏦", montant:2_404 },
+      autre:      { label:"Autres dépenses",           emoji:"📌", montant:  406 },
     },
     biensDetail: [
       { id:"b1", nom:"Appartement Gambetta", regime:"LMNP Micro-BIC", recettes:11_160, deductibles: 5_820, resultat:  5_340 },
@@ -329,18 +341,22 @@ export default function BilanPage() {
           {/* ── Dépenses déductibles par catégorie ─────────── */}
           <div style={{ background:C.wh, borderRadius:14, padding:"18px 20px", border:`1px solid ${C.br}`, marginBottom:14 }}>
             <SectionTitle>Charges déductibles par catégorie</SectionTitle>
-            {Object.entries(data.depensesParCat).map(([k, v]) => (
-              <div key={k} style={{ marginBottom:10 }}>
-                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
-                  <span style={{ fontSize:13, color:C.tx }}>{v.emoji} {v.label}</span>
-                  <div style={{ textAlign:"right" }}>
-                    <span style={{ fontSize:13, fontWeight:700, color:C.rd }}>{euro(v.montant)}</span>
-                    <span style={{ fontSize:11, color:C.tm, marginLeft:6 }}>{pct(v.montant, data.deductibles)} %</span>
+            {BILAN_GROUPES.map(g => {
+              const v = data.depensesParCat[g.key]
+              const montant = v?.montant ?? 0
+              return (
+                <div key={g.key} style={{ marginBottom:10 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:3 }}>
+                    <span style={{ fontSize:13, color: montant > 0 ? C.tx : C.tm }}>{g.emoji} {g.label}</span>
+                    <div style={{ textAlign:"right" }}>
+                      <span style={{ fontSize:13, fontWeight:700, color: montant > 0 ? C.rd : C.tm }}>{euro(montant)}</span>
+                      {montant > 0 && <span style={{ fontSize:11, color:C.tm, marginLeft:6 }}>{pct(montant, data.deductibles)} %</span>}
+                    </div>
                   </div>
+                  <ProgressBar value={montant} total={data.deductibles} color={C.rd} />
                 </div>
-                <ProgressBar value={v.montant} total={data.deductibles} color={C.rd} />
-              </div>
-            ))}
+              )
+            })}
             <div style={{ display:"flex", justifyContent:"space-between", paddingTop:10, borderTop:`1px solid ${C.br}`, marginTop:4 }}>
               <span style={{ fontSize:13, fontWeight:800 }}>Total déductible</span>
               <span style={{ fontSize:13, fontWeight:900, color:C.rd }}>{euro(data.deductibles)}</span>
