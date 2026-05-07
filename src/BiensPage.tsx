@@ -112,11 +112,11 @@ function rowToSimple(row: any): BienSimple {
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
     type: (row.type ?? "appartement") as TypeBien,
     mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
-    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "ir-foncier-micro"),
-    statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
-    valeurAchat: meta.valeurAchat ?? "",
-    surface: meta.surface ?? "",
-    anneeAcquisition: meta.anneeAcquisition ?? "",
+    regime_fiscal: parseRegimeFiscal(row.regime ?? "ir-foncier-micro"),
+    statut: "vacant", loyer_hc: Number(row.loyer_cible ?? 0), charges: 0, depenses: 0,
+    valeurAchat: row.valeur_achat ? String(row.valeur_achat) : (meta.valeurAchat ?? ""),
+    surface: row.surface ? String(row.surface) : (meta.surface ?? ""),
+    anneeAcquisition: row.annee_acquisition ?? (meta.anneeAcquisition ?? ""),
     notes_text: meta.notes_text ?? "",
   }
 }
@@ -127,18 +127,19 @@ function rowToImmeuble(row: any, lots: Lot[]): Immeuble {
     kind: "immeuble",
     id: row.id, nom: row.nom, adresse: row.adresse ?? "",
     mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
-    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "ir-foncier-reel"),
+    regime_fiscal: parseRegimeFiscal(row.regime ?? "ir-foncier-reel"),
     lots,
   }
 }
 
-function rowToLot(row: any, meta: Record<string, string>): Lot {
+function rowToLot(row: any): Lot {
+  const meta = parseMeta(row)
   return {
-    id: row.id, immeuble_id: meta.parent ?? "",
+    id: row.id, immeuble_id: row.bien_id ?? "",
     nom: row.nom,
-    type: (row.type ?? "appartement") as TypeBien,
-    regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "foncier-micro"),
-    statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
+    type: ((row.type_lot ?? "appartement") as TypeBien),
+    regime_fiscal: parseRegimeFiscal(meta.regime_fiscal ?? "ir-foncier-micro"),
+    statut: "vacant", loyer_hc: Number(row.loyer ?? 0), charges: 0, depenses: 0,
   }
 }
 
@@ -771,19 +772,19 @@ export default function BiensPage() {
   async function load() {
     setLoading(true)
     setDbError("")
-    const { data, error } = await supabase
-      .from("biens")
-      .select("*")
-      .order("created_at", { ascending: true })
+    const [bienRes, lotRes] = await Promise.all([
+      supabase.from("biens").select("*").order("created_at", { ascending: true }),
+      supabase.from("lots").select("*"),
+    ])
     setLoading(false)
-    if (error) { setDbError(error.message); return }
+    if (bienRes.error) { setDbError(bienRes.error.message); return }
+    if (lotRes.error)  { setDbError(lotRes.error.message);  return }
 
-    const rows = data ?? []
-    const lotRows  = rows.filter(r => parseMeta(r).kind === "lot")
+    const rows = bienRes.data ?? []
     const immRows  = rows.filter(r => parseMeta(r).kind === "immeuble")
-    const simpRows = rows.filter(r => !["lot","immeuble"].includes(parseMeta(r).kind))
+    const simpRows = rows.filter(r => parseMeta(r).kind !== "immeuble")
 
-    const lots: Lot[] = lotRows.map(r => rowToLot(r, parseMeta(r)))
+    const lots: Lot[] = (lotRes.data ?? []).map(r => rowToLot(r))
     const result: Bien[] = [
       ...simpRows.map(r => rowToSimple(r)),
       ...immRows.map(r => rowToImmeuble(r, lots.filter(l => l.immeuble_id === r.id))),
@@ -806,16 +807,16 @@ export default function BiensPage() {
     const { data, error } = await supabase
       .from("biens")
       .insert({
-        owner_id: userId,
+        user_id: userId,
         nom: f.nom.trim(),
         adresse: f.adresse.trim() || null,
         type: mapTypeBien(f.type),
-        regime_fiscal: f.regime_fiscal,
+        regime: f.regime_fiscal,
+        valeur_achat: f.valeurAchat ? Number(f.valeurAchat) : null,
+        surface: f.surface ? Number(f.surface) : null,
+        annee_acquisition: f.anneeAcquisition || null,
         notes: JSON.stringify({
           mode_detention: f.mode_detention,
-          valeurAchat: f.valeurAchat || null,
-          surface: f.surface || null,
-          anneeAcquisition: f.anneeAcquisition || null,
           notes_text: f.notes || null,
         }),
       })
@@ -829,21 +830,20 @@ export default function BiensPage() {
     setShowAdd(null)
     const { data, error } = await supabase
       .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ kind: "immeuble", mode_detention: f.mode_detention }) })
+      .insert({ user_id: userId, nom: f.nom.trim(), adresse: f.adresse.trim() || null, regime: f.regime_fiscal, notes: JSON.stringify({ kind: "immeuble", mode_detention: f.mode_detention }) })
       .select().single()
     if (error) { setDbError(error.message); return }
     setBiens(prev => [...prev, rowToImmeuble(data, [])])
   }
 
   async function handleAddLot(immeubleId: string, f: any) {
-    if (!userId) { setDbError("Utilisateur non connecté."); return }
     setAddLotFor(null)
     const { data, error } = await supabase
-      .from("biens")
-      .insert({ owner_id: userId, nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime_fiscal, notes: JSON.stringify({ kind: "lot", parent: immeubleId }) })
+      .from("lots")
+      .insert({ bien_id: immeubleId, nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal }) })
       .select().single()
     if (error) { setDbError(error.message); return }
-    const newLot = rowToLot(data, { kind: "lot", parent: immeubleId })
+    const newLot = rowToLot(data)
     setBiens(prev => prev.map(b =>
       b.kind === "immeuble" && b.id === immeubleId ? { ...b, lots: [...b.lots, newLot] } : b
     ))
@@ -852,11 +852,13 @@ export default function BiensPage() {
   async function handleEditSimple(id: string, f: AddBienFormData) {
     const { error } = await supabase.from("biens").update({
       nom: f.nom.trim(), adresse: f.adresse.trim() || null,
-      type: mapTypeBien(f.type), regime_fiscal: f.regime_fiscal,
+      type: mapTypeBien(f.type), regime: f.regime_fiscal,
+      valeur_achat: f.valeurAchat ? Number(f.valeurAchat) : null,
+      surface: f.surface ? Number(f.surface) : null,
+      annee_acquisition: f.anneeAcquisition || null,
       notes: JSON.stringify({
         mode_detention: f.mode_detention,
-        valeurAchat: f.valeurAchat || null, surface: f.surface || null,
-        anneeAcquisition: f.anneeAcquisition || null, notes_text: f.notes || null,
+        notes_text: f.notes || null,
       }),
     }).eq("id", id)
     if (error) { setDbError(error.message); return }
@@ -884,7 +886,7 @@ export default function BiensPage() {
   async function handleEditImmeuble(id: string, f: any) {
     const { error } = await supabase.from("biens").update({
       nom: f.nom.trim(), adresse: f.adresse.trim() || null,
-      regime_fiscal: f.regime_fiscal,
+      regime: f.regime_fiscal,
       notes: JSON.stringify({ kind: "immeuble", mode_detention: f.mode_detention }),
     }).eq("id", id)
     if (error) { setDbError(error.message); return }
@@ -900,11 +902,6 @@ export default function BiensPage() {
 
   async function handleDeleteImmeuble(imm: Immeuble) {
     if (!window.confirm(`Supprimer l'immeuble "${imm.nom}" et ses ${imm.lots.length} lot${imm.lots.length !== 1 ? "s" : ""} ?`)) return
-    const lotIds = imm.lots.map(l => l.id)
-    if (lotIds.length > 0) {
-      const { error } = await supabase.from("biens").delete().in("id", lotIds)
-      if (error) { setDbError(error.message); return }
-    }
     const { error } = await supabase.from("biens").delete().eq("id", imm.id)
     if (error) { setDbError(error.message); return }
     setBiens(prev => prev.filter(b => b.id !== imm.id))
@@ -912,8 +909,8 @@ export default function BiensPage() {
   }
 
   async function handleEditLot(immeubleId: string, lotId: string, f: any) {
-    const { error } = await supabase.from("biens").update({
-      nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime_fiscal,
+    const { error } = await supabase.from("lots").update({
+      nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal }),
     }).eq("id", lotId)
     if (error) { setDbError(error.message); return }
     setEditLot(null)
@@ -930,7 +927,7 @@ export default function BiensPage() {
 
   async function handleDeleteLot(immeubleId: string, lot: Lot) {
     if (!window.confirm(`Supprimer le lot "${lot.nom}" ?`)) return
-    const { error } = await supabase.from("biens").delete().eq("id", lot.id)
+    const { error } = await supabase.from("lots").delete().eq("id", lot.id)
     if (error) { setDbError(error.message); return }
     setBiens(prev => prev.map(b =>
       b.kind === "immeuble" && b.id === immeubleId
