@@ -120,6 +120,22 @@ function stats(txs){
   return {rev,chg,R,CH,loyers,ded,cap,int,cf:R-CH,res:loyers-ded};
 }
 
+// ── Dashboard helpers ──────────────────────────────────────
+const _DASH_TODAY = new Date(); _DASH_TODAY.setHours(0,0,0,0);
+function _dashDays(ds){ const d=new Date(ds); d.setHours(0,0,0,0); return Math.ceil((d.getTime()-_DASH_TODAY.getTime())/86400000); }
+const DASH_BAIL=[
+  {nom:"Appartement Gambetta",bail_date_fin:"2026-07-01",bail_date_revision:"2026-07-01",bail_date_preavis:"2026-06-01"},
+  {nom:"Studio Confluence",   bail_date_fin:"2026-05-01",bail_date_revision:"2026-10-01",bail_date_preavis:"2026-02-01"},
+  {nom:"Garage Bellecour",    bail_date_fin:"2026-06-01",bail_date_revision:"2026-06-01",bail_date_preavis:"2026-04-01"},
+];
+const DASH_DOC_N:Record<string,number>={"Appartement Gambetta":5,"Studio Confluence":5,"Garage Bellecour":3,"T2 Croix-Rousse":5};
+const FinStat=({label,value,color}:{label:string;value:string;color?:string})=>(
+  <div style={{background:C.cr,borderRadius:9,padding:"10px 11px"}}>
+    <div style={{fontSize:10,fontWeight:700,color:C.tm,textTransform:"uppercase" as const,letterSpacing:".05em",marginBottom:4,lineHeight:1.2}}>{label}</div>
+    <div style={{fontSize:14,fontWeight:900,color:color||C.tx,lineHeight:1}}>{value}</div>
+  </div>
+);
+
 export default function App(){
   const [data,setData]=useState(load);
   const [page,setPage]=useState("dash");
@@ -306,7 +322,6 @@ export default function App(){
         {bien&&<button onClick={()=>{setPage("bien");setLotId(null);setSub(isImm?"lots":"apercu");}} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="bien"?C.g:C.gp,color:page==="bien"?"#fff":C.gl}}>🏠 {bien.nom}</button>}
         {lot&&<button onClick={()=>setPage("lot")} style={{padding:"7px 14px",border:"none",borderRadius:"8px 8px 0 0",fontWeight:700,fontSize:13,fontFamily:"inherit",cursor:"pointer",whiteSpace:"nowrap",background:page==="lot"?C.g:C.gp,color:page==="lot"?"#fff":C.gl}}>{LOT_MAP[lot.typeLot]?.emoji||""} {lot.nom}</button>}
         <div style={{flex:1}}/>
-        {page==="dash"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>setShowAddBien(true)}>+ Nouveau bien</Btn>}
         {page==="bien"&&isImm&&sub==="lots"&&<Btn v="gho" sx={{marginBottom:4,fontSize:12}} onClick={()=>openM("addLot",{typeLot:"meuble"})}>+ Nouveau lot</Btn>}
       </div>
 
@@ -315,7 +330,16 @@ export default function App(){
         {/* ══ DASHBOARD ══ */}
         {page==="dash"&&(
           <>
-            <Card sx={{background:`linear-gradient(135deg,${C.g},${C.gl})`,border:"none"}}>
+            {/* En-tête */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+              <div>
+                <h1 style={{fontSize:22,fontWeight:900,color:C.tx,margin:0,lineHeight:1.2}}>Tableau de bord</h1>
+                <div style={{fontSize:13,color:C.tm,marginTop:3}}>{data.biens.length} bien{data.biens.length!==1?"s":""} · {an}</div>
+              </div>
+            </div>
+
+            {/* Barre de synthèse globale */}
+            <Card sx={{background:`linear-gradient(135deg,${C.g},${C.gl})`,border:"none",marginBottom:18}}>
               <div style={{fontSize:11,fontWeight:700,color:"rgba(255,255,255,.65)",textTransform:"uppercase",letterSpacing:".07em",marginBottom:10}}>Synthèse {an}</div>
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:4}}>
                 <SB label="Biens" value={data.biens.length} color="#fff"/>
@@ -324,43 +348,81 @@ export default function App(){
                 <SB label="Cashflow" value={euro(totRevG-totChgG)} color={totRevG-totChgG>=0?"#a8d5b5":"#f5a89a"}/>
               </div>
             </Card>
+
+            {/* État vide → rediriger vers Mes biens */}
             {data.biens.length===0?(
               <Card sx={{textAlign:"center",padding:"48px 20px"}}>
                 <div style={{fontSize:48,marginBottom:12}}>🏡</div>
                 <div style={{fontWeight:700,fontSize:17,marginBottom:6}}>Aucun bien enregistré</div>
-                <div style={{color:C.tm,fontSize:13,marginBottom:20}}>Ajoutez un bien simple ou un immeuble multi-lots.</div>
-                <Btn onClick={()=>setShowAddBien(true)}>+ Ajouter un bien</Btn>
+                <div style={{color:C.tm,fontSize:13,marginBottom:20}}>Ajoutez vos biens depuis la section <strong>Mes biens</strong>.</div>
+                <Btn onClick={()=>setPage("biens")}>→ Aller à Mes biens</Btn>
               </Card>
             ):data.biens.map(b=>{
               const txB=data.transactions.filter(t=>t.bienId===b.id&&String(t.date).startsWith(String(an)));
-              const rev=txB.filter(t=>t.sens==="revenu").reduce((s,t)=>s+t.montant,0);
-              const chg=txB.filter(t=>t.sens==="charge").reduce((s,t)=>s+t.montant,0);
+              const revAn=txB.filter(t=>t.sens==="revenu").reduce((s,t)=>s+t.montant,0);
+              const chgAn=txB.filter(t=>t.sens==="charge").reduce((s,t)=>s+t.montant,0);
+              const loyersAn=txB.filter(t=>t.sens==="revenu"&&(t.categorie||"").toLowerCase().includes("loyer")).reduce((s,t)=>s+t.montant,0);
+              const capAn=txB.filter(t=>t.categorie==="Crédit immobilier – capital").reduce((s,t)=>s+t.montant,0);
               const lotsB2=(data.lots||[]).filter(l=>l.bienId===b.id);
               const imm=b.type==="Immeuble (multi-lots)";
+              const mLoyers=loyersAn/12; const mChg=chgAn/12; const mCap=capAn/12;
+              const mCF=(revAn-chgAn)/12; const mEnrich=mCF+mCap;
+              const docCount=DASH_DOC_N[b.nom]??(data.documents||[]).filter(d=>d.bienId===b.id).length;
+              const bailRef=DASH_BAIL.find(d=>d.nom===b.nom);
+              type DashAlert={type:string;days:number;urgent:boolean};
+              const alerts:DashAlert[]=[];
+              if(bailRef){
+                const checks:[string,string][]=[["Fin de bail",bailRef.bail_date_fin],["Révision loyer",bailRef.bail_date_revision],["Limite préavis",bailRef.bail_date_preavis]];
+                for(const [type,ds] of checks){
+                  const days=_dashDays(ds);
+                  if(days>=0&&days<=90) alerts.push({type,days,urgent:days<=30});
+                }
+              }
               return(
                 <div key={b.id} className="hov" onClick={()=>{setBienId(b.id);setSub(imm?"lots":"apercu");setPage("bien");setLotId(null);}}
-                  style={{background:C.wh,borderRadius:14,padding:"16px 20px",marginBottom:12,boxShadow:"0 1px 10px rgba(45,91,61,.07)",border:`1px solid ${C.br}`,cursor:"pointer",transition:"all .18s",animation:"fu .3s"}}>
-                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12}}>
-                    <div style={{flex:1}}>
+                  style={{background:C.wh,borderRadius:14,padding:"18px 20px",marginBottom:14,boxShadow:"0 1px 10px rgba(45,91,61,.07)",border:`1.5px solid ${C.br}`,cursor:"pointer",transition:"all .18s",animation:"fu .3s"}}>
+
+                  {/* En-tête de carte */}
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,marginBottom:14}}>
+                    <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",gap:8,alignItems:"center",marginBottom:4}}>
                         <span style={{fontSize:20}}>{imm?"🏢":"🏠"}</span>
-                        <span style={{fontWeight:800,fontSize:16}}>{b.nom}</span>
+                        <span style={{fontWeight:800,fontSize:16,color:C.tx}}>{b.nom}</span>
                       </div>
-                      {b.adresse&&<div style={{fontSize:12,color:C.tm,marginBottom:6}}>📍 {b.adresse}</div>}
-                      <div style={{display:"flex",gap:5,flexWrap:"wrap"}}>
+                      {b.adresse&&<div style={{fontSize:12,color:C.tm,marginBottom:7}}>📍 {b.adresse}</div>}
+                      <div style={{display:"flex",gap:5,flexWrap:"wrap" as const}}>
                         <Bdg>{b.type}</Bdg>
+                        {b.mode_detention&&<Bdg bg="#f0edf8" tx="#6c3fc7">{MODE_DETENTION_LABELS[b.mode_detention]||b.mode_detention}</Bdg>}
+                        {b.regime_fiscal&&<Bdg bg={C.bp} tx={C.bl}>{REGIME_FISCAL_LABELS[b.regime_fiscal]||b.regime_fiscal}</Bdg>}
                         {imm&&<Bdg bg={C.bp} tx={C.bl}>{lotsB2.length} lot{lotsB2.length!==1?"s":""}</Bdg>}
-                        {imm&&[...new Set(lotsB2.map(l=>l.typeLot))].map(tp=>{
-                          const info=LOT_MAP[tp]; const col=LOT_COL[tp];
-                          return info?<Bdg key={tp} bg={col?.bg} tx={col?.text}>{info.emoji} {info.label.split(" ")[0]}</Bdg>:null;
-                        })}
                       </div>
                     </div>
                     <div style={{textAlign:"right",flexShrink:0}}>
-                      <div style={{fontSize:9,color:C.tm,textTransform:"uppercase",letterSpacing:".06em"}}>Cashflow {an}</div>
-                      <div style={{fontSize:22,fontWeight:900,color:rev-chg>=0?C.g:C.rd}}>{euro(rev-chg)}</div>
-                      <div style={{fontSize:11,color:C.tm}}>{euro(rev)} rev · {euro(chg)} chg</div>
+                      <div style={{fontSize:10,color:C.tm,textTransform:"uppercase" as const,letterSpacing:".06em",marginBottom:2}}>Cash-flow mensuel</div>
+                      <div style={{fontSize:24,fontWeight:900,color:mCF>=0?C.g:C.rd,lineHeight:1.1}}>{mCF>=0?"+":""}{euro(mCF)}</div>
+                      <div style={{fontSize:11,color:C.tm,marginTop:2}}>moy. / mois · {an}</div>
                     </div>
+                  </div>
+
+                  {/* Grille financière */}
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:8,marginBottom:12}}>
+                    <FinStat label="Loyers / mois"    value={euro(mLoyers)}                                       color={C.g}/>
+                    <FinStat label="Dépenses / mois"  value={euro(mChg)}                                          color={C.rd}/>
+                    <FinStat label="Capital remboursé" value={euro(mCap)}                                         color={C.bl}/>
+                    <FinStat label="Enrichissement"   value={(mEnrich>=0?"+":"")+euro(mEnrich)}                   color={mEnrich>=0?C.g:C.rd}/>
+                  </div>
+
+                  {/* Pied de carte : documents + alertes */}
+                  <div style={{borderTop:`1px solid ${C.br}`,paddingTop:10,display:"flex",gap:7,flexWrap:"wrap" as const,alignItems:"center"}}>
+                    <span style={{fontSize:11,color:C.tm,display:"flex",alignItems:"center",gap:4}}>
+                      📎 <strong>{docCount}</strong> doc{docCount!==1?"s":""}
+                    </span>
+                    {alerts.map((a,i)=>(
+                      <span key={i} style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:a.urgent?C.rp:C.dp,color:a.urgent?C.rd:C.gd}}>
+                        ⚠️ {a.type} · J−{a.days}
+                      </span>
+                    ))}
+                    {docCount===0&&<span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:10,background:C.cr2,color:C.tm}}>📎 Aucun document</span>}
                   </div>
                 </div>
               );
