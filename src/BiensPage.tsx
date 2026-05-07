@@ -24,6 +24,7 @@ interface BienSimple {
   type: TypeBien; mode_detention: ModeDetention; regime_fiscal: RegimeFiscal; statut: Statut
   locataire?: string
   loyer_hc: number; charges: number; depenses: number
+  valeurAchat: string; surface: string; anneeAcquisition: string; notes_text: string
 }
 
 interface Lot {
@@ -47,6 +48,10 @@ const TYPE_LABELS: Record<TypeBien, string> = {
 }
 const TYPE_EMOJI: Record<TypeBien, string> = {
   appartement: "🏠", maison: "🏡", garage: "🅿️", local: "🏪", autre: "🏗",
+}
+const TYPE_BIEN_DISPLAY: Record<TypeBien, string> = {
+  appartement: "Appartement", maison: "Maison",
+  garage: "Garage / Cave", local: "Local commercial", autre: "Autre",
 }
 const MODE_DETENTION_LABELS: Record<ModeDetention, string> = {
   "nom-propre":   "Nom propre",
@@ -109,6 +114,10 @@ function rowToSimple(row: any): BienSimple {
     mode_detention: parseModeDetention(meta.mode_detention ?? "nom-propre"),
     regime_fiscal: parseRegimeFiscal(row.regime_fiscal ?? "ir-foncier-micro"),
     statut: "vacant", loyer_hc: 0, charges: 0, depenses: 0,
+    valeurAchat: meta.valeurAchat ?? "",
+    surface: meta.surface ?? "",
+    anneeAcquisition: meta.anneeAcquisition ?? "",
+    notes_text: meta.notes_text ?? "",
   }
 }
 
@@ -342,14 +351,22 @@ function PlaceholderTab({ tab }: { tab: string }) {
   )
 }
 
-function BienSimpleDetail({ bien, onBack }: { bien: BienSimple; onBack: () => void }) {
+function BienSimpleDetail({ bien, onBack, onEdit, onDelete }: {
+  bien: BienSimple; onBack: () => void; onEdit: () => void; onDelete: () => void
+}) {
   const [tab, setTab] = useState<"infos"|"recettes"|"depenses"|"documents">("infos")
   const c = cf(bien); const loue = bien.statut === "loue"
   return (
     <div>
-      <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", marginBottom:16, fontFamily:"inherit", padding:0 }}>
-        ← Retour à la liste
-      </button>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+          ← Retour à la liste
+        </button>
+        <div style={{ display:"flex", gap:6 }}>
+          <button onClick={onEdit} style={{ background:C.gp, color:C.g, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>✏️ Modifier</button>
+          <button onClick={onDelete} style={{ background:C.rp, color:C.rd, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>🗑 Supprimer</button>
+        </div>
+      </div>
       <DetailBanner title={`${TYPE_EMOJI[bien.type]} ${bien.nom}`} subtitle={bien.adresse} cashflow={c} />
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
         {(["infos","recettes","depenses","documents"] as const).map(t => (
@@ -388,14 +405,22 @@ function BienSimpleDetail({ bien, onBack }: { bien: BienSimple; onBack: () => vo
   )
 }
 
-function LotDetail({ lot, immeuble, onBack }: { lot: Lot; immeuble: Immeuble; onBack: () => void }) {
+function LotDetail({ lot, immeuble, onBack, onEdit, onDelete }: {
+  lot: Lot; immeuble: Immeuble; onBack: () => void; onEdit: () => void; onDelete: () => void
+}) {
   const [tab, setTab] = useState<"infos"|"recettes"|"depenses">("infos")
   const c = cf(lot); const loue = lot.statut === "loue"
   return (
     <div>
-      <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", marginBottom:8, fontFamily:"inherit", padding:0 }}>
-        ← Retour à {immeuble.nom}
-      </button>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
+        <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+          ← Retour à {immeuble.nom}
+        </button>
+        <div style={{ display:"flex", gap:6 }}>
+          <button onClick={onEdit} style={{ background:C.gp, color:C.g, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>✏️ Modifier</button>
+          <button onClick={onDelete} style={{ background:C.rp, color:C.rd, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>🗑 Supprimer</button>
+        </div>
+      </div>
       <div style={{ fontSize:11, color:C.tm, marginBottom:12, fontWeight:600 }}>🏢 {immeuble.nom} › {lot.nom}</div>
       <DetailBanner title={`${TYPE_EMOJI[lot.type]} ${lot.nom}`} subtitle={immeuble.adresse} cashflow={c} />
       <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
@@ -436,8 +461,9 @@ function LotDetail({ lot, immeuble, onBack }: { lot: Lot; immeuble: Immeuble; on
   )
 }
 
-function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot }: {
+function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot, onEdit, onDelete }: {
   immeuble: Immeuble; onBack: () => void; onAddLot: () => void; onClickLot: (l: Lot) => void
+  onEdit: () => void; onDelete: () => void
 }) {
   const [tab, setTab] = useState<"lots"|"infos"|"recettes"|"depenses">("lots")
   const c = immCf(immeuble)
@@ -445,9 +471,15 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot }: {
 
   return (
     <div>
-      <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", marginBottom:16, fontFamily:"inherit", padding:0 }}>
-        ← Retour à la liste
-      </button>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <button onClick={onBack} style={{ display:"flex", alignItems:"center", gap:6, background:"none", border:"none", color:C.g, fontWeight:700, fontSize:14, cursor:"pointer", fontFamily:"inherit", padding:0 }}>
+          ← Retour à la liste
+        </button>
+        <div style={{ display:"flex", gap:6 }}>
+          <button onClick={onEdit} style={{ background:C.gp, color:C.g, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>✏️ Modifier</button>
+          <button onClick={onDelete} style={{ background:C.rp, color:C.rd, border:"none", borderRadius:8, padding:"7px 14px", fontWeight:700, fontSize:12, cursor:"pointer", fontFamily:"inherit" }}>🗑 Supprimer</button>
+        </div>
+      </div>
       <DetailBanner title={`🏢 ${immeuble.nom}`} subtitle={immeuble.adresse} cashflow={c} lots={immeuble.lots.length} />
       <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
         <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
@@ -559,34 +591,55 @@ function RegimeFiscalOptions() {
 }
 
 
-function AddImmeubleModal({ onClose, onSave }: { onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", adresse:"", mode_detention:"nom-propre", regime_fiscal:"ir-foncier-reel" })
+function AddImmeubleModal({ onClose, onSave, title = "Nouvel immeuble", initialValues }: {
+  onClose: () => void; onSave: (f: any) => void
+  title?: string
+  initialValues?: { nom: string; adresse: string; mode_detention: string; regime_fiscal: string }
+}) {
+  const [f, setF] = useState({
+    nom: initialValues?.nom ?? "",
+    adresse: initialValues?.adresse ?? "",
+    mode_detention: initialValues?.mode_detention ?? "nom-propre",
+    regime_fiscal: initialValues?.regime_fiscal ?? "ir-foncier-reel",
+  })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
+  const isEdit = !!initialValues
   return (
-    <Modal title="Nouvel immeuble" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <FieldInput label="Nom *" placeholder="Ex. Immeuble Confluence" value={f.nom} onChange={set("nom")} />
       <FieldInput label="Adresse" placeholder="8 quai Perrache, 69002 Lyon" value={f.adresse} onChange={set("adresse")} />
       <FieldSelect label="Mode de détention" value={f.mode_detention} onChange={set("mode_detention")}><ModeDetentionOptions /></FieldSelect>
       <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
-      <div style={{ background:C.gp, borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:C.g, fontWeight:600 }}>
-        💡 Créé vide — vous ajouterez les lots ensuite.
-      </div>
-      <SaveBtn label="Créer l'immeuble" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
+      {!isEdit && (
+        <div style={{ background:C.gp, borderRadius:10, padding:"12px 14px", marginBottom:16, fontSize:13, color:C.g, fontWeight:600 }}>
+          💡 Créé vide — vous ajouterez les lots ensuite.
+        </div>
+      )}
+      <SaveBtn label={isEdit ? "Enregistrer les modifications" : "Créer l'immeuble"} disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
 }
 
-function AddLotModal({ immeuble, onClose, onSave }: { immeuble: Immeuble; onClose: () => void; onSave: (f: any) => void }) {
-  const [f, setF] = useState({ nom:"", type:"appartement", regime_fiscal: immeuble.regime_fiscal })
+function AddLotModal({ immeuble, onClose, onSave, title, initialValues }: {
+  immeuble: Immeuble; onClose: () => void; onSave: (f: any) => void
+  title?: string
+  initialValues?: { nom: string; type: string; regime_fiscal: string }
+}) {
+  const [f, setF] = useState({
+    nom: initialValues?.nom ?? "",
+    type: initialValues?.type ?? "appartement",
+    regime_fiscal: initialValues?.regime_fiscal ?? immeuble.regime_fiscal,
+  })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
+  const isEdit = !!initialValues
   return (
-    <Modal title={`Nouveau lot · ${immeuble.nom}`} onClose={onClose}>
+    <Modal title={title ?? `Nouveau lot · ${immeuble.nom}`} onClose={onClose}>
       <FieldInput label="Nom du lot *" placeholder="Ex. Appt 1A – T3" value={f.nom} onChange={set("nom")} />
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <FieldSelect label="Type" value={f.type} onChange={set("type")}><TypeOptions /></FieldSelect>
         <FieldSelect label="Régime fiscal" value={f.regime_fiscal} onChange={set("regime_fiscal")}><RegimeFiscalOptions /></FieldSelect>
       </div>
-      <SaveBtn label="Ajouter le lot" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
+      <SaveBtn label={isEdit ? "Enregistrer les modifications" : "Ajouter le lot"} disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
 }
@@ -606,6 +659,9 @@ export default function BiensPage() {
   const [showAdd, setShowAdd]     = useState<"simple" | "immeuble" | null>(null)
   const [addLotFor, setAddLotFor] = useState<string | null>(null)
   const [userId, setUserId]       = useState<string | null>(null)
+  const [editBien, setEditBien]         = useState<BienSimple | null>(null)
+  const [editImmeuble, setEditImmeuble] = useState<Immeuble | null>(null)
+  const [editLot, setEditLot]           = useState<{ lot: Lot; immeubleId: string } | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null))
@@ -693,6 +749,97 @@ export default function BiensPage() {
     ))
   }
 
+  async function handleEditSimple(id: string, f: AddBienFormData) {
+    const { error } = await supabase.from("biens").update({
+      nom: f.nom.trim(), adresse: f.adresse.trim() || null,
+      type: mapTypeBien(f.type), regime_fiscal: f.regime_fiscal,
+      notes: JSON.stringify({
+        mode_detention: f.mode_detention,
+        valeurAchat: f.valeurAchat || null, surface: f.surface || null,
+        anneeAcquisition: f.anneeAcquisition || null, notes_text: f.notes || null,
+      }),
+    }).eq("id", id)
+    if (error) { setDbError(error.message); return }
+    setEditBien(null)
+    setBiens(prev => prev.map(b =>
+      b.kind === "simple" && b.id === id
+        ? { ...b, nom: f.nom.trim(), adresse: f.adresse.trim() || "",
+            type: mapTypeBien(f.type),
+            mode_detention: parseModeDetention(f.mode_detention),
+            regime_fiscal: parseRegimeFiscal(f.regime_fiscal),
+            valeurAchat: f.valeurAchat, surface: f.surface,
+            anneeAcquisition: f.anneeAcquisition, notes_text: f.notes }
+        : b
+    ))
+  }
+
+  async function handleDeleteSimple(id: string) {
+    if (!window.confirm("Supprimer ce bien définitivement ?")) return
+    const { error } = await supabase.from("biens").delete().eq("id", id)
+    if (error) { setDbError(error.message); return }
+    setBiens(prev => prev.filter(b => b.id !== id))
+    setSelected(null)
+  }
+
+  async function handleEditImmeuble(id: string, f: any) {
+    const { error } = await supabase.from("biens").update({
+      nom: f.nom.trim(), adresse: f.adresse.trim() || null,
+      regime_fiscal: f.regime_fiscal,
+      notes: JSON.stringify({ kind: "immeuble", mode_detention: f.mode_detention }),
+    }).eq("id", id)
+    if (error) { setDbError(error.message); return }
+    setEditImmeuble(null)
+    setBiens(prev => prev.map(b =>
+      b.kind === "immeuble" && b.id === id
+        ? { ...b, nom: f.nom.trim(), adresse: f.adresse.trim() || "",
+            mode_detention: parseModeDetention(f.mode_detention),
+            regime_fiscal: parseRegimeFiscal(f.regime_fiscal) }
+        : b
+    ))
+  }
+
+  async function handleDeleteImmeuble(imm: Immeuble) {
+    if (!window.confirm(`Supprimer l'immeuble "${imm.nom}" et ses ${imm.lots.length} lot${imm.lots.length !== 1 ? "s" : ""} ?`)) return
+    const lotIds = imm.lots.map(l => l.id)
+    if (lotIds.length > 0) {
+      const { error } = await supabase.from("biens").delete().in("id", lotIds)
+      if (error) { setDbError(error.message); return }
+    }
+    const { error } = await supabase.from("biens").delete().eq("id", imm.id)
+    if (error) { setDbError(error.message); return }
+    setBiens(prev => prev.filter(b => b.id !== imm.id))
+    setSelected(null)
+  }
+
+  async function handleEditLot(immeubleId: string, lotId: string, f: any) {
+    const { error } = await supabase.from("biens").update({
+      nom: f.nom.trim(), type: f.type, regime_fiscal: f.regime_fiscal,
+    }).eq("id", lotId)
+    if (error) { setDbError(error.message); return }
+    setEditLot(null)
+    setBiens(prev => prev.map(b =>
+      b.kind === "immeuble" && b.id === immeubleId
+        ? { ...b, lots: b.lots.map(l =>
+            l.id === lotId
+              ? { ...l, nom: f.nom.trim(), type: f.type as TypeBien, regime_fiscal: parseRegimeFiscal(f.regime_fiscal) }
+              : l
+          )}
+        : b
+    ))
+  }
+
+  async function handleDeleteLot(immeubleId: string, lot: Lot) {
+    if (!window.confirm(`Supprimer le lot "${lot.nom}" ?`)) return
+    const { error } = await supabase.from("biens").delete().eq("id", lot.id)
+    if (error) { setDbError(error.message); return }
+    setBiens(prev => prev.map(b =>
+      b.kind === "immeuble" && b.id === immeubleId
+        ? { ...b, lots: b.lots.filter(l => l.id !== lot.id) }
+        : b
+    ))
+    setSelected({ kind: "immeuble", id: immeubleId })
+  }
+
   const simples   = biens.filter((b): b is BienSimple => b.kind === "simple")
   const immeubles = biens.filter((b): b is Immeuble   => b.kind === "immeuble")
   const allUnits  = [...simples, ...immeubles.flatMap(i => i.lots)]
@@ -705,7 +852,31 @@ export default function BiensPage() {
     if (selected.kind === "simple") {
       const bien = simples.find(b => b.id === selected.id)
       if (!bien) { setSelected(null); return null }
-      return <BienSimpleDetail bien={bien} onBack={() => setSelected(null)} />
+      return (
+        <>
+          <BienSimpleDetail
+            bien={bien}
+            onBack={() => setSelected(null)}
+            onEdit={() => setEditBien(bien)}
+            onDelete={() => handleDeleteSimple(bien.id)}
+          />
+          {editBien && (
+            <AddBienModal
+              title="Modifier le bien"
+              initialValues={{
+                nom: editBien.nom, adresse: editBien.adresse,
+                type: TYPE_BIEN_DISPLAY[editBien.type] ?? "Autre",
+                mode_detention: editBien.mode_detention,
+                regime_fiscal: editBien.regime_fiscal,
+                valeurAchat: editBien.valeurAchat, surface: editBien.surface,
+                anneeAcquisition: editBien.anneeAcquisition, notes: editBien.notes_text,
+              }}
+              onClose={() => setEditBien(null)}
+              onSave={f => handleEditSimple(editBien.id, f)}
+            />
+          )}
+        </>
+      )
     }
     if (selected.kind === "immeuble") {
       const imm = immeubles.find(b => b.id === selected.id)
@@ -717,9 +888,19 @@ export default function BiensPage() {
             onBack={() => setSelected(null)}
             onAddLot={() => setAddLotFor(imm.id)}
             onClickLot={lot => setSelected({ kind:"lot", id:lot.id, immeuble_id:imm.id })}
+            onEdit={() => setEditImmeuble(imm)}
+            onDelete={() => handleDeleteImmeuble(imm)}
           />
           {addLotFor === imm.id && (
             <AddLotModal immeuble={imm} onClose={() => setAddLotFor(null)} onSave={f => handleAddLot(imm.id, f)} />
+          )}
+          {editImmeuble && (
+            <AddImmeubleModal
+              title="Modifier l'immeuble"
+              initialValues={{ nom: editImmeuble.nom, adresse: editImmeuble.adresse, mode_detention: editImmeuble.mode_detention, regime_fiscal: editImmeuble.regime_fiscal }}
+              onClose={() => setEditImmeuble(null)}
+              onSave={f => handleEditImmeuble(editImmeuble.id, f)}
+            />
           )}
         </>
       )
@@ -728,7 +909,26 @@ export default function BiensPage() {
       const imm = immeubles.find(b => b.id === selected.immeuble_id)
       const lot = imm?.lots.find(l => l.id === selected.id)
       if (!imm || !lot) { setSelected(null); return null }
-      return <LotDetail lot={lot} immeuble={imm} onBack={() => setSelected({ kind:"immeuble", id:imm.id })} />
+      return (
+        <>
+          <LotDetail
+            lot={lot}
+            immeuble={imm}
+            onBack={() => setSelected({ kind:"immeuble", id:imm.id })}
+            onEdit={() => setEditLot({ lot, immeubleId: imm.id })}
+            onDelete={() => handleDeleteLot(imm.id, lot)}
+          />
+          {editLot && (
+            <AddLotModal
+              immeuble={imm}
+              title={`Modifier · ${editLot.lot.nom}`}
+              initialValues={{ nom: editLot.lot.nom, type: editLot.lot.type, regime_fiscal: editLot.lot.regime_fiscal }}
+              onClose={() => setEditLot(null)}
+              onSave={f => handleEditLot(editLot.immeubleId, editLot.lot.id, f)}
+            />
+          )}
+        </>
+      )
     }
   }
 
