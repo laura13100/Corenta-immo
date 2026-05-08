@@ -28,6 +28,37 @@ const formatDate = (d: string) => {
   return `${j}/${m}/${y}`
 }
 
+const TODAY = new Date()
+TODAY.setHours(0, 0, 0, 0)
+
+function joursRestants(dateStr: string): number {
+  const d = new Date(dateStr)
+  d.setHours(0, 0, 0, 0)
+  return Math.ceil((d.getTime() - TODAY.getTime()) / 86400000)
+}
+
+type AlertLevel = "urgent" | "warning" | "ok" | "past"
+
+function getAlertLevel(days: number): AlertLevel {
+  if (days < 0)   return "past"
+  if (days <= 30) return "urgent"
+  if (days <= 90) return "warning"
+  return "ok"
+}
+
+const ALERT_STYLE: Record<AlertLevel, { bg: string; color: string; label: string }> = {
+  urgent:  { bg: C.rp,  color: C.rd,  label: "Urgent"  },
+  warning: { bg: C.dp,  color: C.gd,  label: "À venir" },
+  ok:      { bg: C.gp,  color: C.g,   label: "OK"      },
+  past:    { bg: C.cr2, color: C.tm,  label: "Passé"   },
+}
+
+const MOTIF_REPRISE: Record<string, string> = {
+  "vente":              "Vente du bien",
+  "reprise-personnelle":"Reprise personnelle",
+  "autre":              "Autre",
+}
+
 // ── Types ──────────────────────────────────────────────────
 type CategorieDoc = "bail" | "diagnostic" | "facture" | "assurance" | "impot" | "autre"
 
@@ -42,6 +73,15 @@ interface Document {
   taille?: string
   type_fichier: string
   simule?: boolean    // fichier ajouté manuellement (pas de vrai fichier)
+  // Champs spécifiques aux baux
+  bail_date_debut?: string
+  bail_date_fin?: string
+  bail_date_revision?: string
+  bail_indice_revision?: string
+  bail_date_preavis?: string
+  bail_motif_reprise?: "vente" | "reprise-personnelle" | "autre"
+  bail_rappel_email?: boolean
+  bail_rappel_delai?: "1m" | "3m" | "6m"
 }
 
 const CAT_CONFIG: Record<CategorieDoc, { label: string; emoji: string; bg: string; color: string }> = {
@@ -64,21 +104,27 @@ const BIENS_REF = [
 // ── Données fictives ───────────────────────────────────────
 const MOCK_DOCUMENTS: Document[] = [
   // Appartement Gambetta
-  { id:"dc01", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"bail",       nom:"Bail meublé — Sophie Martin",       date:"2024-09-01", description:"Bail de location meublée 1 an renouvelable",    taille:"245 Ko",  type_fichier:"PDF" },
+  { id:"dc01", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"bail",       nom:"Bail meublé — Sophie Martin",       date:"2024-09-01", description:"Bail de location meublée 1 an renouvelable",    taille:"245 Ko",  type_fichier:"PDF",
+    bail_date_debut:"2024-09-01", bail_date_fin:"2026-07-01", bail_date_revision:"2026-07-01", bail_indice_revision:"143.34",
+    bail_date_preavis:"2026-06-01", bail_motif_reprise:"vente", bail_rappel_email:true, bail_rappel_delai:"3m" },
   { id:"dc02", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"diagnostic", nom:"DPE 2024 — Gambetta",               date:"2024-08-15", description:"Diagnostic performance énergétique · Classe C", taille:"1,2 Mo",  type_fichier:"PDF" },
   { id:"dc03", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"assurance",  nom:"Attestation PNO 2026",              date:"2026-01-01", description:"Assurance propriétaire non occupant 2026",       taille:"312 Ko",  type_fichier:"PDF" },
   { id:"dc04", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 1 240 €",          taille:"189 Ko",  type_fichier:"PDF" },
   { id:"dc05", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"facture",    nom:"Facture plombier mars 2026",        date:"2026-03-12", description:"Remplacement robinetterie salle de bain — 320 €", taille:"87 Ko", type_fichier:"PDF" },
 
   // Studio Confluence
-  { id:"dc06", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"bail",       nom:"Bail meublé — Thomas Durand",       date:"2025-05-01", description:"Bail de location meublée signé le 01/05/2025",  taille:"231 Ko",  type_fichier:"PDF" },
+  { id:"dc06", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"bail",       nom:"Bail meublé — Thomas Durand",       date:"2025-05-01", description:"Bail de location meublée signé le 01/05/2025",  taille:"231 Ko",  type_fichier:"PDF",
+    bail_date_debut:"2025-05-01", bail_date_fin:"2026-05-01", bail_date_revision:"2026-10-01", bail_indice_revision:"145.12",
+    bail_date_preavis:"2026-02-01", bail_rappel_email:false },
   { id:"dc07", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"diagnostic", nom:"DPE 2023 — Confluence",             date:"2023-04-20", description:"Diagnostic performance énergétique · Classe D", taille:"980 Ko",  type_fichier:"PDF" },
   { id:"dc08", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"assurance",  nom:"Attestation PNO 2026",              date:"2026-01-01", description:"Assurance propriétaire non occupant 2026",       taille:"298 Ko",  type_fichier:"PDF" },
   { id:"dc09", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"facture",    nom:"Facture peinture fév. 2026",        date:"2026-02-22", description:"Réfection peinture complète — 1 200 €",         taille:"156 Ko",  type_fichier:"PDF" },
   { id:"dc10", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 680 €",            taille:"175 Ko",  type_fichier:"PDF" },
 
   // Garage Bellecour
-  { id:"dc11", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"bail",       nom:"Bail parking — Marie Blanc",        date:"2023-06-01", description:"Bail location parking, reconduit tacitement",   taille:"98 Ko",   type_fichier:"PDF" },
+  { id:"dc11", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"bail",       nom:"Bail parking — Marie Blanc",        date:"2023-06-01", description:"Bail location parking, reconduit tacitement",   taille:"98 Ko",   type_fichier:"PDF",
+    bail_date_debut:"2023-06-01", bail_date_fin:"2026-06-01", bail_date_revision:"2026-06-01", bail_indice_revision:"143.34",
+    bail_date_preavis:"2026-04-01", bail_motif_reprise:"reprise-personnelle", bail_rappel_email:true, bail_rappel_delai:"1m" },
   { id:"dc12", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance",  nom:"Attestation assurance garage 2026", date:"2026-01-01", description:"Assurance garage 2026",                         taille:"142 Ko",  type_fichier:"PDF" },
   { id:"dc13", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 210 €",            taille:"168 Ko",  type_fichier:"PDF" },
 
@@ -214,7 +260,9 @@ function UploadZone({ onFileSelect }: { onFileSelect: (nom: string) => void }) {
 
 // ── Carte document ─────────────────────────────────────────
 
-function DocumentCard({ doc }: { doc: Document }) {
+function DocumentCard({ doc, onEdit, onDelete }: {
+  doc: Document; onEdit: () => void; onDelete: () => void
+}) {
   const cfg = CAT_CONFIG[doc.categorie]
   return (
     <div
@@ -267,6 +315,63 @@ function DocumentCard({ doc }: { doc: Document }) {
             <span style={{ fontSize: 11, color: C.tm, paddingTop: 2 }}>{doc.taille}</span>
           )}
         </div>
+        {/* Échéances bail */}
+        {doc.categorie === "bail" && (doc.bail_date_fin || doc.bail_date_revision || doc.bail_date_preavis) && (() => {
+          const echeances: { label: string; date: string }[] = [
+            doc.bail_date_fin      ? { label: "Fin du bail",     date: doc.bail_date_fin      } : null,
+            doc.bail_date_revision ? { label: "Révision loyer",  date: doc.bail_date_revision } : null,
+            doc.bail_date_preavis  ? { label: "Limite préavis",  date: doc.bail_date_preavis  } : null,
+          ].filter(Boolean) as { label: string; date: string }[]
+          return (
+            <div style={{ marginTop:10, paddingTop:10, borderTop:`1px dashed ${C.br}` }}>
+              <div style={{ fontSize:10, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".06em", marginBottom:7 }}>
+                Échéances
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                {echeances.map(({ label, date }) => {
+                  const days  = joursRestants(date)
+                  const level = getAlertLevel(days)
+                  const s     = ALERT_STYLE[level]
+                  const tag   = days < 0 ? "Passé" : days === 0 ? "Aujourd'hui" : `J−${days}`
+                  return (
+                    <div key={label} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+                      <span style={{ fontSize:12, color:C.tm }}>{label}</span>
+                      <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                        <span style={{ fontSize:12, color:C.tx, fontWeight:600 }}>{formatDate(date)}</span>
+                        <span style={{ fontSize:10, fontWeight:700, padding:"1px 8px", borderRadius:10, background:s.bg, color:s.color, whiteSpace:"nowrap" }}>{tag}</span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+              {doc.bail_motif_reprise && (
+                <div style={{ marginTop:6, fontSize:11, color:C.tm }}>
+                  Motif prévu : <strong>{MOTIF_REPRISE[doc.bail_motif_reprise]}</strong>
+                </div>
+              )}
+              {doc.bail_rappel_email && (
+                <div style={{ marginTop:5, fontSize:11, color:C.tm }}>
+                  📧 Rappel {doc.bail_rappel_delai === "1m" ? "1 mois" : doc.bail_rappel_delai === "3m" ? "3 mois" : "6 mois"} avant
+                </div>
+              )}
+            </div>
+          )
+        })()}
+
+        <div style={{ display: "flex", gap: 6, marginTop: 10 }}>
+          <button
+            onClick={onEdit}
+            style={{ padding: "4px 10px", borderRadius: 7, background: C.gp, color: C.g, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            ✏️ Modifier
+          </button>
+          <button
+            onClick={onDelete}
+            style={{ padding: "4px 10px", borderRadius: 7, background: C.rp, color: C.rd, border: "none", fontWeight: 700, fontSize: 11, cursor: "pointer", fontFamily: "inherit" }}
+          >
+            🗑 Supprimer
+          </button>
+        </div>
       </div>
 
       {/* Bouton voir */}
@@ -295,32 +400,51 @@ function DocumentCard({ doc }: { doc: Document }) {
 // ── Modal ajout d'un document ──────────────────────────────
 
 interface FormState {
-  bien_id:      string
-  categorie:    CategorieDoc
-  nom:          string
-  date:         string
-  description:  string
-  type_fichier: string
+  bien_id:            string
+  categorie:          CategorieDoc
+  nom:                string
+  date:               string
+  description:        string
+  type_fichier:       string
+  bail_date_debut:    string
+  bail_date_fin:      string
+  bail_date_revision: string
+  bail_indice_revision: string
+  bail_date_preavis:  string
+  bail_motif_reprise: string
+  bail_rappel_email:  boolean
+  bail_rappel_delai:  string
 }
 
 const today = new Date().toISOString().slice(0, 10)
 
-function AddDocumentModal({
-  nomFichierPrefill,
+function DocumentModal({
+  nomFichierPrefill = "",
   onClose,
   onSave,
+  initialValues,
 }: {
-  nomFichierPrefill: string
+  nomFichierPrefill?: string
   onClose: () => void
   onSave: (d: Document) => void
+  initialValues?: Document
 }) {
+  const isEdit = !!initialValues
   const [form, setForm] = useState<FormState>({
-    bien_id:      BIENS_REF[0].id,
-    categorie:    "bail",
-    nom:          nomFichierPrefill.replace(/\.[^.]+$/, "") || "",
-    date:         today,
-    description:  "",
-    type_fichier: nomFichierPrefill.split(".").pop()?.toUpperCase() || "PDF",
+    bien_id:            initialValues?.bien_id            ?? BIENS_REF[0].id,
+    categorie:          initialValues?.categorie          ?? "bail",
+    nom:                initialValues?.nom                ?? (nomFichierPrefill.replace(/\.[^.]+$/, "") || ""),
+    date:               initialValues?.date               ?? today,
+    description:        initialValues?.description        ?? "",
+    type_fichier:       initialValues?.type_fichier       ?? (nomFichierPrefill.split(".").pop()?.toUpperCase() || "PDF"),
+    bail_date_debut:    initialValues?.bail_date_debut    ?? "",
+    bail_date_fin:      initialValues?.bail_date_fin      ?? "",
+    bail_date_revision: initialValues?.bail_date_revision ?? "",
+    bail_indice_revision: initialValues?.bail_indice_revision ?? "",
+    bail_date_preavis:  initialValues?.bail_date_preavis  ?? "",
+    bail_motif_reprise: initialValues?.bail_motif_reprise ?? "",
+    bail_rappel_email:  initialValues?.bail_rappel_email  ?? false,
+    bail_rappel_delai:  initialValues?.bail_rappel_delai  ?? "3m",
   })
 
   const set = (key: keyof FormState) => (v: string) =>
@@ -332,16 +456,26 @@ function AddDocumentModal({
   const handleSave = () => {
     if (!canSave) return
     onSave({
-      id:           Date.now().toString(),
+      id:           isEdit ? initialValues!.id : Date.now().toString(),
       bien_id:      form.bien_id,
       bien_nom:     bienNom,
       categorie:    form.categorie,
       nom:          form.nom.trim(),
       date:         form.date,
       description:  form.description || undefined,
-      taille:       nomFichierPrefill ? "— Ko" : undefined,
+      taille:       isEdit ? initialValues!.taille : (nomFichierPrefill ? "— Ko" : undefined),
       type_fichier: form.type_fichier || "PDF",
-      simule:       true,
+      simule:       isEdit ? initialValues!.simule : true,
+      ...(form.categorie === "bail" ? {
+        bail_date_debut:      form.bail_date_debut    || undefined,
+        bail_date_fin:        form.bail_date_fin      || undefined,
+        bail_date_revision:   form.bail_date_revision || undefined,
+        bail_indice_revision: form.bail_indice_revision || undefined,
+        bail_date_preavis:    form.bail_date_preavis  || undefined,
+        bail_motif_reprise:   (form.bail_motif_reprise as Document["bail_motif_reprise"]) || undefined,
+        bail_rappel_email:    form.bail_rappel_email || undefined,
+        bail_rappel_delai:    form.bail_rappel_email ? (form.bail_rappel_delai as Document["bail_rappel_delai"]) : undefined,
+      } : {}),
     })
     onClose()
   }
@@ -357,33 +491,35 @@ function AddDocumentModal({
       >
         {/* En-tête */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>Nouveau document</div>
+          <div style={{ fontWeight:800, fontSize:17, color:C.g }}>
+            {isEdit ? "Modifier le document" : "Nouveau document"}
+          </div>
           <button onClick={onClose} style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:C.tm }}>✕</button>
         </div>
 
-        {/* Zone upload dans le modal */}
-        <div style={{ marginBottom:16 }}>
-          <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
-            Fichier
-          </label>
-          {nomFichierPrefill ? (
-            <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:C.gp, borderRadius:10 }}>
-              <span style={{ fontSize:20 }}>✅</span>
-              <div>
-                <div style={{ fontWeight:700, fontSize:13, color:C.g }}>Fichier sélectionné</div>
-                <div style={{ fontSize:12, color:C.tm }}>{nomFichierPrefill}</div>
+        {/* Zone upload — uniquement à l'ajout */}
+        {!isEdit && (
+          <div style={{ marginBottom:16 }}>
+            <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
+              Fichier
+            </label>
+            {nomFichierPrefill ? (
+              <div style={{ display:"flex", alignItems:"center", gap:10, padding:"12px 14px", background:C.gp, borderRadius:10 }}>
+                <span style={{ fontSize:20 }}>✅</span>
+                <div>
+                  <div style={{ fontWeight:700, fontSize:13, color:C.g }}>Fichier sélectionné</div>
+                  <div style={{ fontSize:12, color:C.tm }}>{nomFichierPrefill}</div>
+                </div>
               </div>
-            </div>
-          ) : (
-            <div
-              style={{ border:`2px dashed ${C.br}`, borderRadius:10, padding:"18px 16px", textAlign:"center", cursor:"default", background:C.cr }}
-            >
-              <div style={{ fontSize:24, marginBottom:4 }}>📄</div>
-              <div style={{ fontSize:12, color:C.tm }}>Aucun fichier sélectionné</div>
-              <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>Fermez et utilisez la zone d'upload de la page principale</div>
-            </div>
-          )}
-        </div>
+            ) : (
+              <div style={{ border:`2px dashed ${C.br}`, borderRadius:10, padding:"18px 16px", textAlign:"center", cursor:"default", background:C.cr }}>
+                <div style={{ fontSize:24, marginBottom:4 }}>📄</div>
+                <div style={{ fontSize:12, color:C.tm }}>Aucun fichier sélectionné</div>
+                <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>Fermez et utilisez la zone d'upload de la page principale</div>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Catégorie */}
         <div style={{ marginBottom:14 }}>
@@ -452,6 +588,76 @@ function AddDocumentModal({
           onChange={e => set("description")(e.target.value)}
         />
 
+        {/* ── Section Bail ──────────────────────────── */}
+        {form.categorie === "bail" && (
+          <div style={{ borderTop:`1.5px solid ${C.br}`, marginTop:8, paddingTop:18, marginBottom:16 }}>
+            <div style={{ fontSize:11, fontWeight:800, color:C.g, textTransform:"uppercase", letterSpacing:".07em", marginBottom:14 }}>
+              📋 Détails du bail
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <FieldInput label="Date de début" type="date" value={form.bail_date_debut} onChange={e => set("bail_date_debut")(e.target.value)} />
+              <FieldInput label="Date de fin" type="date" value={form.bail_date_fin} onChange={e => set("bail_date_fin")(e.target.value)} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <FieldInput label="Prochaine révision loyer" type="date" value={form.bail_date_revision} onChange={e => set("bail_date_revision")(e.target.value)} />
+              <FieldInput label="Indice IRL" placeholder="Ex. 143.34" value={form.bail_indice_revision} onChange={e => set("bail_indice_revision")(e.target.value)} />
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <FieldInput label="Date limite préavis" type="date" value={form.bail_date_preavis} onChange={e => set("bail_date_preavis")(e.target.value)} />
+              <div style={{ marginBottom:12 }}>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Motif de reprise</label>
+                <select
+                  value={form.bail_motif_reprise}
+                  onChange={e => set("bail_motif_reprise")(e.target.value)}
+                  style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none", boxSizing:"border-box" }}
+                >
+                  <option value="">— Non défini</option>
+                  <option value="vente">Vente du bien</option>
+                  <option value="reprise-personnelle">Reprise personnelle</option>
+                  <option value="autre">Autre</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Rappels email */}
+            <div style={{ background:C.cr, borderRadius:10, padding:"14px 16px" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: form.bail_rappel_email ? 14 : 0 }}>
+                <input
+                  type="checkbox" id="bail-rappel"
+                  checked={form.bail_rappel_email}
+                  onChange={e => setForm(f => ({ ...f, bail_rappel_email: e.target.checked }))}
+                  style={{ width:16, height:16, accentColor:C.g, cursor:"pointer" }}
+                />
+                <label htmlFor="bail-rappel" style={{ fontSize:13, fontWeight:600, color:C.tx, cursor:"pointer" }}>
+                  📧 Recevoir un rappel email
+                </label>
+              </div>
+              {form.bail_rappel_email && (
+                <div>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:8 }}>
+                    Délai avant l'échéance
+                  </div>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {(["1m","3m","6m"] as const).map((v, _, arr) => {
+                      const label = v === "1m" ? "1 mois" : v === "3m" ? "3 mois" : "6 mois"
+                      const active = form.bail_rappel_delai === v
+                      return (
+                        <button key={v} type="button"
+                          onClick={() => setForm(f => ({ ...f, bail_rappel_delai: v }))}
+                          style={{ flex:1, padding:"9px 0", borderRadius:9, border:`2px solid ${active ? C.g : C.br}`, background:active ? C.gp : C.wh, color:active ? C.g : C.tm, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         <button
           onClick={handleSave}
           style={{
@@ -463,9 +669,131 @@ function AddDocumentModal({
             fontFamily:"inherit", transition:"background .15s",
           }}
         >
-          Enregistrer le document
+          {isEdit ? "Enregistrer les modifications" : "Enregistrer le document"}
         </button>
       </div>
+    </div>
+  )
+}
+
+// ── Rappels à venir ────────────────────────────────────────
+
+function RappelsSection({ documents }: { documents: Document[] }) {
+  const rappels = useMemo(() => {
+    const result: { doc: Document; type: string; date: string; days: number }[] = []
+    for (const doc of documents) {
+      if (doc.categorie !== "bail") continue
+      const checks: { label: string; date: string | undefined }[] = [
+        { label: "Fin du bail",    date: doc.bail_date_fin      },
+        { label: "Révision loyer", date: doc.bail_date_revision },
+        { label: "Limite préavis", date: doc.bail_date_preavis  },
+      ]
+      for (const { label, date } of checks) {
+        if (!date) continue
+        const days = joursRestants(date)
+        if (days >= 0 && days <= 180)
+          result.push({ doc, type: label, date, days })
+      }
+    }
+    return result.sort((a, b) => a.days - b.days)
+  }, [documents])
+
+  if (rappels.length === 0) return null
+
+  const urgent = rappels.filter(r => getAlertLevel(r.days) === "urgent").length
+
+  return (
+    <div style={{ background:C.wh, borderRadius:14, border:`1.5px solid ${C.br}`, padding:"18px 20px", marginBottom:20 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+        <span style={{ fontWeight:800, fontSize:15, color:C.tx }}>🔔 Rappels à venir</span>
+        <span style={{ fontSize:11, fontWeight:700, background:urgent > 0 ? C.rp : C.gp, color:urgent > 0 ? C.rd : C.g, padding:"2px 9px", borderRadius:10 }}>
+          {rappels.length}
+        </span>
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+        {rappels.map((r, i) => {
+          const level = getAlertLevel(r.days)
+          const s = ALERT_STYLE[level]
+          return (
+            <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", borderRadius:10, background:s.bg, border:`1px solid ${s.color}33` }}>
+              <div style={{ flex:1, minWidth:0 }}>
+                <div style={{ fontWeight:700, fontSize:13, color:C.tx }}>{r.doc.nom}</div>
+                <div style={{ fontSize:12, color:C.tm, marginTop:2 }}>{r.type} · {r.doc.bien_nom}</div>
+              </div>
+              <div style={{ textAlign:"right", flexShrink:0, marginLeft:12 }}>
+                <div style={{ fontSize:14, fontWeight:900, color:s.color }}>
+                  {r.days === 0 ? "Aujourd'hui" : `J−${r.days}`}
+                </div>
+                <div style={{ fontSize:11, color:C.tm }}>{formatDate(r.date)}</div>
+              </div>
+            </div>
+          )
+        })}
+      </div>
+      <div style={{ fontSize:11, color:C.tm, marginTop:12, paddingTop:10, borderTop:`1px solid ${C.br}` }}>
+        Affiche les échéances dans les 6 prochains mois. Les rappels email seront activés quand la connexion sera configurée.
+      </div>
+    </div>
+  )
+}
+
+// ── Ordre d'affichage des catégories ──────────────────────
+const CAT_ORDER: CategorieDoc[] = ["bail", "facture", "assurance", "diagnostic", "impot", "autre"]
+
+// ── Groupe par bien ────────────────────────────────────────
+
+function BienGroup({ bien, docs, onEdit, onDelete }: {
+  bien: { id: string; nom: string }
+  docs: Document[]
+  onEdit: (d: Document) => void
+  onDelete: (id: string) => void
+}) {
+  const [collapsed, setCollapsed] = useState(false)
+
+  const byCat: Partial<Record<CategorieDoc, Document[]>> = {}
+  for (const d of docs) {
+    if (!byCat[d.categorie]) byCat[d.categorie] = []
+    byCat[d.categorie]!.push(d)
+  }
+
+  return (
+    <div style={{ marginBottom: 20 }}>
+      <div
+        onClick={() => setCollapsed(v => !v)}
+        style={{
+          display: "flex", alignItems: "center", gap: 8,
+          padding: "10px 14px", borderRadius: 10,
+          background: `linear-gradient(135deg,${C.g},${C.gl})`,
+          cursor: "pointer", marginBottom: collapsed ? 0 : 14,
+          userSelect: "none",
+        }}
+      >
+        <span style={{ fontSize: 12, color: "rgba(255,255,255,.7)" }}>{collapsed ? "▶" : "▼"}</span>
+        <span style={{ fontWeight: 800, fontSize: 15, color: "#fff", flex: 1 }}>{bien.nom}</span>
+        <span style={{ fontSize: 11, fontWeight: 700, background: "rgba(255,255,255,.22)", color: "#fff", padding: "2px 9px", borderRadius: 10 }}>
+          {docs.length} doc{docs.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+      {!collapsed && (
+        <div>
+          {CAT_ORDER.filter(cat => (byCat[cat]?.length ?? 0) > 0).map(cat => {
+            const catDocs = byCat[cat]!
+            const cfg = CAT_CONFIG[cat]
+            return (
+              <div key={cat} style={{ marginBottom: 10 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8, paddingLeft: 4 }}>
+                  <span style={{ fontSize: 13 }}>{cfg.emoji}</span>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: cfg.color, textTransform: "uppercase", letterSpacing: ".06em" }}>{cfg.label}</span>
+                  <span style={{ fontSize: 10, fontWeight: 700, color: cfg.color, background: cfg.bg, padding: "1px 6px", borderRadius: 8 }}>{catDocs.length}</span>
+                </div>
+                {catDocs.map(d => (
+                  <DocumentCard key={d.id} doc={d} onEdit={() => onEdit(d)} onDelete={() => onDelete(d.id)} />
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }
@@ -478,10 +806,27 @@ export default function DocumentsPage() {
   const [filterCat,  setFilterCat]    = useState("")
   const [showAdd, setShowAdd]         = useState(false)
   const [prefillNom, setPrefillNom]   = useState("")
+  const [editItem, setEditItem]       = useState<Document | null>(null)
 
   const openAddWithFile = (nom: string) => {
     setPrefillNom(nom)
     setShowAdd(true)
+  }
+
+  const handleDelete = (id: string) => {
+    if (!window.confirm("Supprimer ce document ?")) return
+    setDocuments(prev => prev.filter(d => d.id !== id))
+  }
+
+  const handleSaveAdd = (d: Document) => {
+    setDocuments(prev => [d, ...prev])
+    if (filterBien && filterBien !== d.bien_id) setFilterBien("")
+    if (filterCat  && filterCat  !== d.categorie) setFilterCat("")
+  }
+
+  const handleSaveEdit = (updated: Document) => {
+    setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d))
+    setEditItem(null)
   }
 
   // ── Filtrage ───────────────────────────────────────────
@@ -519,6 +864,9 @@ export default function DocumentsPage() {
           + Ajouter
         </button>
       </div>
+
+      {/* ── Rappels à venir ──────────────────────────────── */}
+      <RappelsSection documents={documents} />
 
       {/* ── Zone d'upload ────────────────────────────────── */}
       <UploadZone onFileSelect={openAddWithFile} />
@@ -562,7 +910,7 @@ export default function DocumentsPage() {
         })}
       </div>
 
-      {/* ── Liste ────────────────────────────────────────── */}
+      {/* ── Liste groupée par bien ───────────────────────── */}
       {filtered.length === 0 ? (
         <div style={{ background:C.wh, borderRadius:14, padding:"56px 20px", textAlign:"center", border:`1px solid ${C.br}` }}>
           <div style={{ fontSize:40, marginBottom:12 }}>📂</div>
@@ -576,19 +924,51 @@ export default function DocumentsPage() {
           </button>
         </div>
       ) : (
-        filtered.map(d => <DocumentCard key={d.id} doc={d} />)
+        <>
+          {BIENS_REF.map(bien => {
+            const bienDocs = filtered.filter(d => d.bien_id === bien.id)
+            if (bienDocs.length === 0) return null
+            return (
+              <BienGroup
+                key={bien.id}
+                bien={bien}
+                docs={bienDocs}
+                onEdit={setEditItem}
+                onDelete={handleDelete}
+              />
+            )
+          })}
+          {/* Documents sans bien référencé */}
+          {(() => {
+            const knownIds = new Set(BIENS_REF.map(b => b.id))
+            const orphans = filtered.filter(d => !knownIds.has(d.bien_id))
+            if (orphans.length === 0) return null
+            return (
+              <BienGroup
+                key="__orphan__"
+                bien={{ id: "__orphan__", nom: "Autres" }}
+                docs={orphans}
+                onEdit={setEditItem}
+                onDelete={handleDelete}
+              />
+            )
+          })()}
+        </>
       )}
 
-      {/* ── Modal ────────────────────────────────────────── */}
+      {/* ── Modals ───────────────────────────────────────── */}
       {showAdd && (
-        <AddDocumentModal
+        <DocumentModal
           nomFichierPrefill={prefillNom}
           onClose={() => { setShowAdd(false); setPrefillNom("") }}
-          onSave={d => {
-            setDocuments(prev => [d, ...prev])
-            if (filterBien && filterBien !== d.bien_id) setFilterBien("")
-            if (filterCat  && filterCat  !== d.categorie) setFilterCat("")
-          }}
+          onSave={handleSaveAdd}
+        />
+      )}
+      {editItem && (
+        <DocumentModal
+          initialValues={editItem}
+          onClose={() => setEditItem(null)}
+          onSave={handleSaveEdit}
         />
       )}
     </>
