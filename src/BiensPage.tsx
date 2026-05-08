@@ -160,7 +160,7 @@ function rowToLocataire(row: any): Locataire {
   const meta = parseMeta(row)
   return {
     id: row.id, bien_id: row.bien_id ?? null, lot_id: row.lot_id ?? null,
-    prenom: meta.prenom ?? "", nom: row.nom ?? "",
+    prenom: row.prenom ?? meta.prenom ?? "", nom: row.nom ?? "",
     email: row.email ?? "", tel: row.tel ?? "",
     type_contrat: (row.type_contrat ?? "nu") as TypeContrat,
     statut: (row.statut ?? "en_place") as StatutLocataire,
@@ -1208,17 +1208,19 @@ export default function BiensPage() {
     const { id, type, immeubleId } = addLocataireFor
     setAddLocataireFor(null)
     const { data, error } = await supabase.from("locataires").insert({
-      [type === "bien" ? "bien_id" : "lot_id"]: id,
-      nom: f.nom.trim(),
-      email: f.email.trim() || null,
-      tel: f.tel.trim() || null,
-      type_contrat: f.type_contrat,
-      statut: f.statut,
-      loyer: f.loyer ? Number(f.loyer) : null,
+      bien_id:       type === "bien" ? id : (immeubleId ?? null),
+      lot_id:        type === "lot"  ? id : null,
+      prenom:        f.prenom.trim() || null,
+      nom:           f.nom.trim(),
+      email:         f.email.trim() || null,
+      tel:           f.tel.trim() || null,
+      type_contrat:  f.type_contrat,
+      statut:        f.statut,
+      loyer:         f.loyer ? Number(f.loyer) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
-      date_entree: f.date_entree || null,
-      date_sortie: f.date_sortie || null,
-      notes: JSON.stringify({ prenom: f.prenom.trim() || null, charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      date_entree:   f.date_entree || null,
+      date_sortie:   f.date_sortie || null,
+      notes:         JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
     }).select().single()
     if (error) { setDbError(error.message); return }
     const newLoc = rowToLocataire(data)
@@ -1233,16 +1235,17 @@ export default function BiensPage() {
     const { loc, id, type, immeubleId } = editLocataireState
     setEditLocataireState(null)
     const { data, error } = await supabase.from("locataires").update({
-      nom: f.nom.trim(),
-      email: f.email.trim() || null,
-      tel: f.tel.trim() || null,
-      type_contrat: f.type_contrat,
-      statut: f.statut,
-      loyer: f.loyer ? Number(f.loyer) : null,
+      prenom:        f.prenom.trim() || null,
+      nom:           f.nom.trim(),
+      email:         f.email.trim() || null,
+      tel:           f.tel.trim() || null,
+      type_contrat:  f.type_contrat,
+      statut:        f.statut,
+      loyer:         f.loyer ? Number(f.loyer) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
-      date_entree: f.date_entree || null,
-      date_sortie: f.date_sortie || null,
-      notes: JSON.stringify({ prenom: f.prenom.trim() || null, charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      date_entree:   f.date_entree || null,
+      date_sortie:   f.date_sortie || null,
+      notes:         JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
     }).eq("id", loc.id).select().single()
     if (error) { setDbError(error.message); return }
     const updatedLoc = rowToLocataire(data)
