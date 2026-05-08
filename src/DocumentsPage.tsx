@@ -1,4 +1,5 @@
-import { useState, useMemo, useRef } from "react"
+import { useState, useMemo, useRef, useEffect } from "react"
+import { supabase } from "./supabase"
 
 // ── Palette ────────────────────────────────────────────────
 const C = {
@@ -93,48 +94,14 @@ const CAT_CONFIG: Record<CategorieDoc, { label: string; emoji: string; bg: strin
   autre:       { label: "Autre",       emoji: "📄", bg: C.cr2, color: C.tm },
 }
 
-// ── Biens de référence ─────────────────────────────────────
-const BIENS_REF = [
-  { id: "b1", nom: "Appartement Gambetta" },
-  { id: "b2", nom: "Studio Confluence"    },
-  { id: "b3", nom: "Garage Bellecour"     },
-  { id: "b4", nom: "T2 Croix-Rousse"     },
-]
-
-// ── Données fictives ───────────────────────────────────────
-const MOCK_DOCUMENTS: Document[] = [
-  // Appartement Gambetta
-  { id:"dc01", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"bail",       nom:"Bail meublé — Sophie Martin",       date:"2024-09-01", description:"Bail de location meublée 1 an renouvelable",    taille:"245 Ko",  type_fichier:"PDF",
-    bail_date_debut:"2024-09-01", bail_date_fin:"2026-07-01", bail_date_revision:"2026-07-01", bail_indice_revision:"143.34",
-    bail_date_preavis:"2026-06-01", bail_motif_reprise:"vente", bail_rappel_email:true, bail_rappel_delai:"3m" },
-  { id:"dc02", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"diagnostic", nom:"DPE 2024 — Gambetta",               date:"2024-08-15", description:"Diagnostic performance énergétique · Classe C", taille:"1,2 Mo",  type_fichier:"PDF" },
-  { id:"dc03", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"assurance",  nom:"Attestation PNO 2026",              date:"2026-01-01", description:"Assurance propriétaire non occupant 2026",       taille:"312 Ko",  type_fichier:"PDF" },
-  { id:"dc04", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 1 240 €",          taille:"189 Ko",  type_fichier:"PDF" },
-  { id:"dc05", bien_id:"b1", bien_nom:"Appartement Gambetta", categorie:"facture",    nom:"Facture plombier mars 2026",        date:"2026-03-12", description:"Remplacement robinetterie salle de bain — 320 €", taille:"87 Ko", type_fichier:"PDF" },
-
-  // Studio Confluence
-  { id:"dc06", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"bail",       nom:"Bail meublé — Thomas Durand",       date:"2025-05-01", description:"Bail de location meublée signé le 01/05/2025",  taille:"231 Ko",  type_fichier:"PDF",
-    bail_date_debut:"2025-05-01", bail_date_fin:"2026-05-01", bail_date_revision:"2026-10-01", bail_indice_revision:"145.12",
-    bail_date_preavis:"2026-02-01", bail_rappel_email:false },
-  { id:"dc07", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"diagnostic", nom:"DPE 2023 — Confluence",             date:"2023-04-20", description:"Diagnostic performance énergétique · Classe D", taille:"980 Ko",  type_fichier:"PDF" },
-  { id:"dc08", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"assurance",  nom:"Attestation PNO 2026",              date:"2026-01-01", description:"Assurance propriétaire non occupant 2026",       taille:"298 Ko",  type_fichier:"PDF" },
-  { id:"dc09", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"facture",    nom:"Facture peinture fév. 2026",        date:"2026-02-22", description:"Réfection peinture complète — 1 200 €",         taille:"156 Ko",  type_fichier:"PDF" },
-  { id:"dc10", bien_id:"b2", bien_nom:"Studio Confluence",    categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 680 €",            taille:"175 Ko",  type_fichier:"PDF" },
-
-  // Garage Bellecour
-  { id:"dc11", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"bail",       nom:"Bail parking — Marie Blanc",        date:"2023-06-01", description:"Bail location parking, reconduit tacitement",   taille:"98 Ko",   type_fichier:"PDF",
-    bail_date_debut:"2023-06-01", bail_date_fin:"2026-06-01", bail_date_revision:"2026-06-01", bail_indice_revision:"143.34",
-    bail_date_preavis:"2026-04-01", bail_motif_reprise:"reprise-personnelle", bail_rappel_email:true, bail_rappel_delai:"1m" },
-  { id:"dc12", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"assurance",  nom:"Attestation assurance garage 2026", date:"2026-01-01", description:"Assurance garage 2026",                         taille:"142 Ko",  type_fichier:"PDF" },
-  { id:"dc13", bien_id:"b3", bien_nom:"Garage Bellecour",     categorie:"impot",      nom:"Taxe foncière 2025",                date:"2025-09-20", description:"Avis de taxe foncière 2025 — 210 €",            taille:"168 Ko",  type_fichier:"PDF" },
-
-  // T2 Croix-Rousse
-  { id:"dc14", bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"diagnostic", nom:"DPE 2024 — Croix-Rousse",          date:"2024-11-05", description:"Diagnostic performance énergétique · Classe E", taille:"1,1 Mo",  type_fichier:"PDF" },
-  { id:"dc15", bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"facture",    nom:"Facture chauffe-eau fév. 2026",     date:"2026-02-18", description:"Remplacement chauffe-eau — 1 200 €",            taille:"203 Ko",  type_fichier:"PDF" },
-  { id:"dc16", bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"facture",    nom:"Facture peinture mars 2026",        date:"2026-03-10", description:"Réfection peinture salon et chambre — 450 €",   taille:"178 Ko",  type_fichier:"PDF" },
-  { id:"dc17", bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"assurance",  nom:"Attestation PNO 2026",              date:"2026-01-01", description:"Assurance propriétaire non occupant 2026",       taille:"287 Ko",  type_fichier:"PDF" },
-  { id:"dc18", bien_id:"b4", bien_nom:"T2 Croix-Rousse",     categorie:"autre",      nom:"Rapport diagnostics complet",       date:"2026-05-20", description:"Dossier diagnostics complet pour mise en location", taille:"2,3 Mo", type_fichier:"PDF" },
-]
+// ── Type référence bien (chargé depuis Supabase) ──────────
+interface BienRef {
+  id: string
+  nom: string
+  kind: "simple" | "immeuble" | "lot"
+  parentId?: string
+  parentNom?: string
+}
 
 // ── Primitives UI ──────────────────────────────────────────
 
@@ -423,15 +390,17 @@ function DocumentModal({
   onClose,
   onSave,
   initialValues,
+  bienRefs,
 }: {
   nomFichierPrefill?: string
   onClose: () => void
   onSave: (d: Document) => void
   initialValues?: Document
+  bienRefs: BienRef[]
 }) {
   const isEdit = !!initialValues
   const [form, setForm] = useState<FormState>({
-    bien_id:            initialValues?.bien_id            ?? BIENS_REF[0].id,
+    bien_id:            initialValues?.bien_id            ?? (bienRefs[0]?.id ?? ""),
     categorie:          initialValues?.categorie          ?? "bail",
     nom:                initialValues?.nom                ?? (nomFichierPrefill.replace(/\.[^.]+$/, "") || ""),
     date:               initialValues?.date               ?? today,
@@ -450,7 +419,10 @@ function DocumentModal({
   const set = (key: keyof FormState) => (v: string) =>
     setForm(f => ({ ...f, [key]: v }))
 
-  const bienNom = BIENS_REF.find(b => b.id === form.bien_id)?.nom ?? ""
+  const bienRef = bienRefs.find(b => b.id === form.bien_id)
+  const bienNom = bienRef
+    ? (bienRef.kind === "lot" ? `${bienRef.parentNom ?? ""} › ${bienRef.nom}` : bienRef.nom)
+    : ""
   const canSave = !!form.nom.trim() && !!form.date
 
   const handleSave = () => {
@@ -557,7 +529,22 @@ function DocumentModal({
             onChange={e => set("bien_id")(e.target.value)}
             style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none", boxSizing:"border-box" }}
           >
-            {BIENS_REF.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
+            <option value="">— Sélectionner un bien</option>
+            {bienRefs.filter(b => b.kind === "simple").length > 0 && (
+              <optgroup label="Biens">
+                {bienRefs.filter(b => b.kind === "simple").map(b => (
+                  <option key={b.id} value={b.id}>{b.nom}</option>
+                ))}
+              </optgroup>
+            )}
+            {bienRefs.filter(b => b.kind === "immeuble").map(imm => (
+              <optgroup key={imm.id} label={`🏢 ${imm.nom}`}>
+                <option value={imm.id}>{imm.nom} (immeuble entier)</option>
+                {bienRefs.filter(b => b.kind === "lot" && b.parentId === imm.id).map(lot => (
+                  <option key={lot.id} value={lot.id}>›  {lot.nom}</option>
+                ))}
+              </optgroup>
+            ))}
           </select>
         </div>
 
@@ -801,12 +788,32 @@ function BienGroup({ bien, docs, onEdit, onDelete }: {
 // ── Page principale ────────────────────────────────────────
 
 export default function DocumentsPage() {
-  const [documents, setDocuments]     = useState<Document[]>(MOCK_DOCUMENTS)
+  const [documents, setDocuments]     = useState<Document[]>([])
+  const [bienRefs,  setBienRefs]      = useState<BienRef[]>([])
   const [filterBien, setFilterBien]   = useState("")
   const [filterCat,  setFilterCat]    = useState("")
   const [showAdd, setShowAdd]         = useState(false)
   const [prefillNom, setPrefillNom]   = useState("")
   const [editItem, setEditItem]       = useState<Document | null>(null)
+
+  useEffect(() => {
+    Promise.all([
+      supabase.from("biens").select("id,nom,notes"),
+      supabase.from("lots").select("id,nom,bien_id"),
+    ]).then(([{ data: bData }, { data: lData }]) => {
+      const refs: BienRef[] = []
+      for (const b of (bData ?? [])) {
+        let notes: Record<string, string> = {}
+        try { notes = JSON.parse(b.notes || "{}") } catch {}
+        refs.push({ id: b.id, nom: b.nom, kind: notes.kind === "immeuble" ? "immeuble" : "simple" })
+      }
+      for (const l of (lData ?? [])) {
+        const parent = refs.find(r => r.id === l.bien_id)
+        refs.push({ id: l.id, nom: l.nom, kind: "lot", parentId: l.bien_id, parentNom: parent?.nom })
+      }
+      setBienRefs(refs)
+    })
+  }, [])
 
   const openAddWithFile = (nom: string) => {
     setPrefillNom(nom)
@@ -875,7 +882,17 @@ export default function DocumentsPage() {
       <div style={{ background:C.wh, borderRadius:12, padding:"14px 16px", border:`1px solid ${C.br}`, marginBottom:16, display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <FieldSelect label="Bien" value={filterBien} onChange={setFilterBien}>
           <option value="">Tous les biens</option>
-          {BIENS_REF.map(b => <option key={b.id} value={b.id}>{b.nom}</option>)}
+          {bienRefs.filter(b => b.kind === "simple").map(b => (
+            <option key={b.id} value={b.id}>{b.nom}</option>
+          ))}
+          {bienRefs.filter(b => b.kind === "immeuble").map(imm => (
+            <optgroup key={imm.id} label={`🏢 ${imm.nom}`}>
+              <option value={imm.id}>{imm.nom} (immeuble)</option>
+              {bienRefs.filter(b => b.kind === "lot" && b.parentId === imm.id).map(lot => (
+                <option key={lot.id} value={lot.id}>›  {lot.nom}</option>
+              ))}
+            </optgroup>
+          ))}
         </FieldSelect>
         <FieldSelect label="Catégorie" value={filterCat} onChange={setFilterCat}>
           <option value="">Toutes catégories</option>
@@ -925,13 +942,16 @@ export default function DocumentsPage() {
         </div>
       ) : (
         <>
-          {BIENS_REF.map(bien => {
-            const bienDocs = filtered.filter(d => d.bien_id === bien.id)
+          {bienRefs.map(ref => {
+            const bienDocs = filtered.filter(d => d.bien_id === ref.id)
             if (bienDocs.length === 0) return null
+            const displayNom = ref.kind === "lot"
+              ? `${ref.parentNom ?? ""} › ${ref.nom}`
+              : ref.nom
             return (
               <BienGroup
-                key={bien.id}
-                bien={bien}
+                key={ref.id}
+                bien={{ id: ref.id, nom: displayNom }}
                 docs={bienDocs}
                 onEdit={setEditItem}
                 onDelete={handleDelete}
@@ -940,7 +960,7 @@ export default function DocumentsPage() {
           })}
           {/* Documents sans bien référencé */}
           {(() => {
-            const knownIds = new Set(BIENS_REF.map(b => b.id))
+            const knownIds = new Set(bienRefs.map(b => b.id))
             const orphans = filtered.filter(d => !knownIds.has(d.bien_id))
             if (orphans.length === 0) return null
             return (
@@ -962,6 +982,7 @@ export default function DocumentsPage() {
           nomFichierPrefill={prefillNom}
           onClose={() => { setShowAdd(false); setPrefillNom("") }}
           onSave={handleSaveAdd}
+          bienRefs={bienRefs}
         />
       )}
       {editItem && (
@@ -969,6 +990,7 @@ export default function DocumentsPage() {
           initialValues={editItem}
           onClose={() => setEditItem(null)}
           onSave={handleSaveEdit}
+          bienRefs={bienRefs}
         />
       )}
     </>

@@ -27,6 +27,8 @@ interface Locataire {
   type_contrat: TypeContrat; statut: StatutLocataire
   loyer: number; charges: number; depot_garantie: number
   date_entree: string; date_sortie: string; notes_text: string
+  delai_preavis: string; date_revision_loyer: string
+  indice_revision: string; notes_revision: string
 }
 
 interface LocataireForm {
@@ -34,6 +36,8 @@ interface LocataireForm {
   type_contrat: string; statut: string
   loyer: string; charges: string; depot_garantie: string
   date_entree: string; date_sortie: string; notes: string
+  delai_preavis: string; date_revision_loyer: string
+  indice_revision: string; notes_revision: string
 }
 
 interface BienSimple {
@@ -105,6 +109,15 @@ const STATUT_LOC_LABELS: Record<StatutLocataire, string> = {
 const STATUT_LOC_COLOR: Record<StatutLocataire, string> = { "en_place": C.g, "preavis": "#ca6f1e", "parti": C.rd }
 const STATUT_LOC_BG: Record<StatutLocataire, string>    = { "en_place": C.gp, "preavis": "#fdf2e9", "parti": C.rp }
 
+const PREAVIS_LABELS: Record<string, string> = { "1m": "1 mois", "3m": "3 mois", "autre": "Autre" }
+
+function joursJusqua(dateStr: string): number | null {
+  if (!dateStr) return null
+  const today = new Date(); today.setHours(0,0,0,0)
+  const d = new Date(dateStr); d.setHours(0,0,0,0)
+  return Math.ceil((d.getTime() - today.getTime()) / 86400000)
+}
+
 const REGIME_FISCAL_LABELS: Record<RegimeFiscal, string> = {
   "ir-foncier-reel":  "IR — foncier réel",
   "ir-foncier-micro": "IR — micro-foncier",
@@ -168,6 +181,10 @@ function rowToLocataire(row: any): Locataire {
     depot_garantie: Number(row.depot_garantie ?? 0),
     date_entree: row.date_entree ?? "", date_sortie: row.date_sortie ?? "",
     notes_text: meta.notes_text ?? "",
+    delai_preavis: row.delai_preavis ?? "",
+    date_revision_loyer: row.date_revision_loyer ?? "",
+    indice_revision: row.indice_revision ?? "",
+    notes_revision: row.notes_revision ?? "",
   }
 }
 
@@ -294,6 +311,7 @@ function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initi
     type_contrat: "meuble", statut: "en_place",
     loyer: "", charges: "", depot_garantie: "",
     date_entree: "", date_sortie: "", notes: "",
+    delai_preavis: "", date_revision_loyer: "", indice_revision: "", notes_revision: "",
   }
   const [f, setF] = useState<LocataireForm>({ ...DEF, ...initial })
   const set = (k: keyof LocataireForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -332,6 +350,28 @@ function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initi
         <FieldInput label="Dépôt de garantie (€)" type="number" value={f.depot_garantie} onChange={set("depot_garantie")} />
       </div>
       <FieldInput label="Notes" value={f.notes} onChange={set("notes")} />
+      <div style={{ borderTop:`1.5px solid ${C.br}`, marginTop:4, paddingTop:14, marginBottom:4 }}>
+        <div style={{ fontSize:11, fontWeight:800, color:C.g, textTransform:"uppercase", letterSpacing:".07em", marginBottom:12 }}>
+          📋 Révision du loyer & préavis
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <FieldSelect label="Délai de préavis locataire" value={f.delai_preavis} onChange={set("delai_preavis")}>
+            <option value="">— Non défini</option>
+            <option value="1m">1 mois</option>
+            <option value="3m">3 mois</option>
+            <option value="autre">Autre</option>
+          </FieldSelect>
+          <FieldInput label="Date de révision du loyer" type="date" value={f.date_revision_loyer} onChange={set("date_revision_loyer")} />
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <FieldSelect label="Indice de révision" value={f.indice_revision} onChange={set("indice_revision")}>
+            <option value="">— Non défini</option>
+            <option value="IRL">IRL</option>
+            <option value="autre">Autre</option>
+          </FieldSelect>
+          <FieldInput label="Notes révision" value={f.notes_revision} onChange={set("notes_revision")} />
+        </div>
+      </div>
       <SaveBtn label="Enregistrer" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
@@ -398,6 +438,33 @@ function LocataireSection({ mode_exploitation, locataires, onAdd, onEdit, onDele
           {active.depot_garantie > 0 && <InfoRow label="Dépôt de garantie" value={euro(active.depot_garantie)} />}
           {active.date_entree && <InfoRow label="Entrée" value={active.date_entree.split("-").reverse().join("/")} />}
           {active.date_sortie && <InfoRow label="Sortie prévue" value={active.date_sortie.split("-").reverse().join("/")} />}
+          {active.date_revision_loyer && (() => {
+            const days = joursJusqua(active.date_revision_loyer)
+            const urgent  = days !== null && days >= 0 && days <= 30
+            const warning = days !== null && days >= 0 && days <= 90
+            return (
+              <div style={{ marginTop:10, padding:"10px 12px", borderRadius:10, background:urgent?C.rp:warning?"#fef9e7":C.gp, border:`1px solid ${urgent?C.rd:warning?"#b7860b":C.g}33` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:urgent?C.rd:warning?"#b7860b":C.g }}>📅 Révision du loyer</span>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.tx }}>{active.date_revision_loyer.split("-").reverse().join("/")}</span>
+                    {warning && (
+                      <span style={{ fontSize:10, fontWeight:800, padding:"1px 8px", borderRadius:10, background:urgent?C.rd:"#b7860b", color:"#fff" }}>
+                        {days === 0 ? "Aujourd'hui" : `J−${days}`}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {active.indice_revision && <div style={{ fontSize:11, color:C.tm, marginTop:3 }}>Indice : <strong>{active.indice_revision}</strong></div>}
+                {active.notes_revision  && <div style={{ fontSize:11, color:C.tm, marginTop:2, fontStyle:"italic" }}>{active.notes_revision}</div>}
+              </div>
+            )
+          })()}
+          {active.delai_preavis && (
+            <div style={{ marginTop:6, fontSize:12, color:C.tm }}>
+              📢 Préavis locataire : <strong>{PREAVIS_LABELS[active.delai_preavis] ?? active.delai_preavis}</strong>
+            </div>
+          )}
           {active.notes_text && <div style={{ fontSize:12, color:C.tm, marginTop:8, fontStyle:"italic" }}>{active.notes_text}</div>}
         </div>
       ) : (
@@ -1218,9 +1285,13 @@ export default function BiensPage() {
       statut:        f.statut,
       loyer:         f.loyer ? Number(f.loyer) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
-      date_entree:   f.date_entree || null,
-      date_sortie:   f.date_sortie || null,
-      notes:         JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      date_entree:         f.date_entree || null,
+      date_sortie:         f.date_sortie || null,
+      notes:               JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      delai_preavis:       f.delai_preavis || null,
+      date_revision_loyer: f.date_revision_loyer || null,
+      indice_revision:     f.indice_revision || null,
+      notes_revision:      f.notes_revision || null,
     }).select().single()
     if (error) { setDbError(error.message); return }
     const newLoc = rowToLocataire(data)
@@ -1243,9 +1314,13 @@ export default function BiensPage() {
       statut:        f.statut,
       loyer:         f.loyer ? Number(f.loyer) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
-      date_entree:   f.date_entree || null,
-      date_sortie:   f.date_sortie || null,
-      notes:         JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      date_entree:         f.date_entree || null,
+      date_sortie:         f.date_sortie || null,
+      notes:               JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      delai_preavis:       f.delai_preavis || null,
+      date_revision_loyer: f.date_revision_loyer || null,
+      indice_revision:     f.indice_revision || null,
+      notes_revision:      f.notes_revision || null,
     }).eq("id", loc.id).select().single()
     if (error) { setDbError(error.message); return }
     const updatedLoc = rowToLocataire(data)
@@ -1318,6 +1393,10 @@ export default function BiensPage() {
                 depot_garantie: String(editLocataireState.loc.depot_garantie),
                 date_entree: editLocataireState.loc.date_entree, date_sortie: editLocataireState.loc.date_sortie,
                 notes: editLocataireState.loc.notes_text,
+                delai_preavis: editLocataireState.loc.delai_preavis,
+                date_revision_loyer: editLocataireState.loc.date_revision_loyer,
+                indice_revision: editLocataireState.loc.indice_revision,
+                notes_revision: editLocataireState.loc.notes_revision,
               }}
             />
           )}
@@ -1390,6 +1469,10 @@ export default function BiensPage() {
                 depot_garantie: String(editLocataireState.loc.depot_garantie),
                 date_entree: editLocataireState.loc.date_entree, date_sortie: editLocataireState.loc.date_sortie,
                 notes: editLocataireState.loc.notes_text,
+                delai_preavis: editLocataireState.loc.delai_preavis,
+                date_revision_loyer: editLocataireState.loc.date_revision_loyer,
+                indice_revision: editLocataireState.loc.indice_revision,
+                notes_revision: editLocataireState.loc.notes_revision,
               }}
             />
           )}
