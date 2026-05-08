@@ -236,8 +236,13 @@ function rowToLot(row: any, locs: Locataire[] = []): Lot {
     locataire: active ? `${active.prenom} ${active.nom}`.trim() : undefined,
     locataires: locs,
     loyer_hc: active ? active.loyer : Number(row.loyer ?? 0),
-    charges: active ? active.charges : 0, depenses: 0,
+    charges:  active ? active.charges : Number(row.charges ?? 0),
+    depenses: 0,
   }
+}
+
+function naturalSort(a: string, b: string): number {
+  return a.localeCompare(b, "fr", { numeric: true, sensitivity: "base" })
 }
 
 function cf(b: BienSimple | Lot) { return b.loyer_hc + b.charges - b.depenses }
@@ -1019,13 +1024,15 @@ function AddImmeubleModal({ onClose, onSave, title = "Nouvel immeuble", initialV
 function AddLotModal({ immeuble, onClose, onSave, title, initialValues }: {
   immeuble: Immeuble; onClose: () => void; onSave: (f: any) => void
   title?: string
-  initialValues?: { nom: string; type: string; regime_fiscal: string; mode_exploitation?: string }
+  initialValues?: { nom: string; type: string; regime_fiscal: string; mode_exploitation?: string; loyer?: string; charges?: string }
 }) {
   const [f, setF] = useState({
     nom: initialValues?.nom ?? "",
     type: initialValues?.type ?? "appartement",
     regime_fiscal: initialValues?.regime_fiscal ?? immeuble.regime_fiscal,
     mode_exploitation: initialValues?.mode_exploitation ?? "meuble",
+    loyer: initialValues?.loyer ?? "",
+    charges: initialValues?.charges ?? "",
   })
   const set = (k: string) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => setF(p => ({ ...p, [k]: e.target.value }))
   const isEdit = !!initialValues
@@ -1045,6 +1052,10 @@ function AddLotModal({ immeuble, onClose, onSave, title, initialValues }: {
         <option value="vacant">Vacant</option>
         <option value="autre">Autre</option>
       </FieldSelect>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldInput label="Loyer HC cible (€)" type="number" placeholder="0" value={f.loyer} onChange={set("loyer")} />
+        <FieldInput label="Charges cibles (€)" type="number" placeholder="0" value={f.charges} onChange={set("charges")} />
+      </div>
       <SaveBtn label={isEdit ? "Enregistrer les modifications" : "Ajouter le lot"} disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
     </Modal>
   )
@@ -1094,9 +1105,12 @@ export default function BiensPage() {
     const immRows  = rows.filter(r => parseMeta(r).kind === "immeuble")
     const simpRows = rows.filter(r => parseMeta(r).kind !== "immeuble")
 
-    const lots: Lot[] = (lotRes.data ?? []).map(r =>
-      rowToLot(r, allLocs.filter(l => l.lot_id === r.id))
-    )
+    const lots: Lot[] = (lotRes.data ?? [])
+      .sort((a, b) => {
+        if (a.sort_order != null && b.sort_order != null) return a.sort_order - b.sort_order
+        return naturalSort(a.nom ?? "", b.nom ?? "")
+      })
+      .map(r => rowToLot(r, allLocs.filter(l => l.lot_id === r.id)))
     const result: Bien[] = [
       ...simpRows.map(r => rowToSimple(r, allLocs.filter(l => l.bien_id === r.id))),
       ...immRows.map(r => rowToImmeuble(r, lots.filter(l => l.immeuble_id === r.id))),
@@ -1153,12 +1167,19 @@ export default function BiensPage() {
     setAddLotFor(null)
     const { data, error } = await supabase
       .from("lots")
-      .insert({ bien_id: immeubleId, nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }) })
+      .insert({
+        bien_id: immeubleId, nom: f.nom.trim(), type_lot: f.type,
+        loyer:   f.loyer   ? Number(f.loyer)   : null,
+        charges: f.charges ? Number(f.charges) : null,
+        notes: JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }),
+      })
       .select().single()
     if (error) { setDbError(error.message); return }
     const newLot = rowToLot(data)
     setBiens(prev => prev.map(b =>
-      b.kind === "immeuble" && b.id === immeubleId ? { ...b, lots: [...b.lots, newLot] } : b
+      b.kind === "immeuble" && b.id === immeubleId
+        ? { ...b, lots: [...b.lots, newLot].sort((a, z) => naturalSort(a.nom, z.nom)) }
+        : b
     ))
   }
 
@@ -1225,7 +1246,11 @@ export default function BiensPage() {
 
   async function handleEditLot(immeubleId: string, lotId: string, f: any) {
     const { error } = await supabase.from("lots").update({
-      nom: f.nom.trim(), type_lot: f.type, notes: JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }),
+      nom:     f.nom.trim(),
+      type_lot: f.type,
+      loyer:   f.loyer   ? Number(f.loyer)   : null,
+      charges: f.charges ? Number(f.charges) : null,
+      notes:   JSON.stringify({ regime_fiscal: f.regime_fiscal, mode_exploitation: f.mode_exploitation }),
     }).eq("id", lotId)
     if (error) { setDbError(error.message); return }
     setEditLot(null)
@@ -1233,7 +1258,13 @@ export default function BiensPage() {
       b.kind === "immeuble" && b.id === immeubleId
         ? { ...b, lots: b.lots.map(l =>
             l.id === lotId
-              ? { ...l, nom: f.nom.trim(), type: f.type as TypeBien, regime_fiscal: parseRegimeFiscal(f.regime_fiscal), mode_exploitation: (f.mode_exploitation as ModeExploitation) ?? "autre" }
+              ? { ...l,
+                  nom: f.nom.trim(), type: f.type as TypeBien,
+                  regime_fiscal: parseRegimeFiscal(f.regime_fiscal),
+                  mode_exploitation: (f.mode_exploitation as ModeExploitation) ?? "autre",
+                  loyer_hc: l.statut === "vacant" ? Number(f.loyer || 0) : l.loyer_hc,
+                  charges:  l.statut === "vacant" ? Number(f.charges || 0) : l.charges,
+                }
               : l
           )}
         : b
@@ -1450,7 +1481,7 @@ export default function BiensPage() {
             <AddLotModal
               immeuble={imm}
               title={`Modifier · ${editLot.lot.nom}`}
-              initialValues={{ nom: editLot.lot.nom, type: editLot.lot.type, regime_fiscal: editLot.lot.regime_fiscal, mode_exploitation: editLot.lot.mode_exploitation }}
+              initialValues={{ nom: editLot.lot.nom, type: editLot.lot.type, regime_fiscal: editLot.lot.regime_fiscal, mode_exploitation: editLot.lot.mode_exploitation, loyer: editLot.lot.loyer_hc ? String(editLot.lot.loyer_hc) : "", charges: editLot.lot.charges ? String(editLot.lot.charges) : "" }}
               onClose={() => setEditLot(null)}
               onSave={f => handleEditLot(editLot.immeubleId, editLot.lot.id, f)}
             />
