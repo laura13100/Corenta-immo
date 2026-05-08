@@ -73,7 +73,7 @@ interface Document {
   description?: string
   taille?: string
   type_fichier: string
-  simule?: boolean    // fichier ajouté manuellement (pas de vrai fichier)
+  file_path?: string  // chemin dans Supabase Storage (null = sans fichier)
   // Champs spécifiques aux baux
   bail_date_debut?: string
   bail_date_fin?: string
@@ -83,6 +83,29 @@ interface Document {
   bail_motif_reprise?: "vente" | "reprise-personnelle" | "autre"
   bail_rappel_email?: boolean
   bail_rappel_delai?: "1m" | "3m" | "6m"
+}
+
+function rowToDocument(row: any): Document {
+  return {
+    id:                   row.id,
+    bien_id:              row.bien_id ?? "",
+    bien_nom:             row.bien_nom ?? "",
+    categorie:            (row.categorie ?? "autre") as CategorieDoc,
+    nom:                  row.nom,
+    date:                 typeof row.date === "string" ? row.date.slice(0, 10) : String(row.date),
+    description:          row.description ?? undefined,
+    taille:               row.taille ?? undefined,
+    type_fichier:         row.type_fichier ?? "PDF",
+    file_path:            row.file_path ?? undefined,
+    bail_date_debut:      row.bail_date_debut  ? String(row.bail_date_debut).slice(0,10)  : undefined,
+    bail_date_fin:        row.bail_date_fin    ? String(row.bail_date_fin).slice(0,10)    : undefined,
+    bail_date_revision:   row.bail_date_revision  ? String(row.bail_date_revision).slice(0,10)  : undefined,
+    bail_indice_revision: row.bail_indice_revision ?? undefined,
+    bail_date_preavis:    row.bail_date_preavis ? String(row.bail_date_preavis).slice(0,10) : undefined,
+    bail_motif_reprise:   row.bail_motif_reprise ?? undefined,
+    bail_rappel_email:    row.bail_rappel_email ?? undefined,
+    bail_rappel_delai:    row.bail_rappel_delai ?? undefined,
+  }
 }
 
 const CAT_CONFIG: Record<CategorieDoc, { label: string; emoji: string; bg: string; color: string }> = {
@@ -148,14 +171,14 @@ function FieldInput({ label, ...props }: React.InputHTMLAttributes<HTMLInputElem
 
 // ── Zone d'upload visuelle ─────────────────────────────────
 
-function UploadZone({ onFileSelect }: { onFileSelect: (nom: string) => void }) {
+function UploadZone({ onFileSelect }: { onFileSelect: (file: File) => void }) {
   const [dragging, setDragging] = useState(false)
   const [fileName, setFileName] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   const handleFile = (file: File) => {
     setFileName(file.name)
-    onFileSelect(file.name)
+    onFileSelect(file)
     setTimeout(() => setFileName(null), 3000)
   }
 
@@ -260,9 +283,9 @@ function DocumentCard({ doc, onEdit, onDelete }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 700, fontSize: 14, color: C.tx, marginBottom: 4, lineHeight: 1.3 }}>
           {doc.nom}
-          {doc.simule && (
-            <span style={{ marginLeft: 6, fontSize: 10, background: C.dp, color: C.gd, padding: "1px 6px", borderRadius: 10, fontWeight: 700 }}>
-              simulé
+          {!doc.file_path && (
+            <span style={{ marginLeft: 6, fontSize: 10, background: C.cr2, color: C.tm, padding: "1px 6px", borderRadius: 10, fontWeight: 700 }}>
+              sans fichier
             </span>
           )}
         </div>
@@ -343,17 +366,23 @@ function DocumentCard({ doc, onEdit, onDelete }: {
 
       {/* Bouton voir */}
       <button
-        onClick={e => { e.stopPropagation(); alert("Ouverture du fichier non disponible en mode démo.") }}
+        onClick={async e => {
+          e.stopPropagation()
+          if (!doc.file_path) { alert("Aucun fichier attaché à ce document."); return }
+          const { data, error } = await supabase.storage.from("documents").createSignedUrl(doc.file_path, 3600)
+          if (error || !data?.signedUrl) { alert("Impossible d'ouvrir le fichier."); return }
+          window.open(data.signedUrl, "_blank")
+        }}
         style={{
           flexShrink: 0,
           padding: "6px 12px",
           borderRadius: 8,
-          border: `1.5px solid ${C.br}`,
-          background: C.wh,
-          color: C.tm,
+          border: `1.5px solid ${doc.file_path ? C.g : C.br}`,
+          background: doc.file_path ? C.gp : C.wh,
+          color: doc.file_path ? C.g : C.tm,
           fontWeight: 600,
           fontSize: 12,
-          cursor: "pointer",
+          cursor: doc.file_path ? "pointer" : "default",
           fontFamily: "inherit",
           whiteSpace: "nowrap",
         }}
@@ -435,9 +464,9 @@ function DocumentModal({
       nom:          form.nom.trim(),
       date:         form.date,
       description:  form.description || undefined,
-      taille:       isEdit ? initialValues!.taille : (nomFichierPrefill ? "— Ko" : undefined),
+      taille:       isEdit ? initialValues!.taille : undefined,
       type_fichier: form.type_fichier || "PDF",
-      simule:       isEdit ? initialValues!.simule : true,
+      file_path:    isEdit ? initialValues!.file_path : undefined,
       ...(form.categorie === "bail" ? {
         bail_date_debut:      form.bail_date_debut    || undefined,
         bail_date_fin:        form.bail_date_fin      || undefined,
@@ -794,13 +823,17 @@ export default function DocumentsPage() {
   const [filterCat,  setFilterCat]    = useState("")
   const [showAdd, setShowAdd]         = useState(false)
   const [prefillNom, setPrefillNom]   = useState("")
+  const [pendingFile, setPendingFile] = useState<File | null>(null)
   const [editItem, setEditItem]       = useState<Document | null>(null)
+  const [dbError,  setDbError]        = useState("")
+  const [saving,   setSaving]         = useState(false)
 
   useEffect(() => {
     Promise.all([
       supabase.from("biens").select("id,nom,notes"),
       supabase.from("lots").select("id,nom,bien_id"),
-    ]).then(([{ data: bData }, { data: lData }]) => {
+      supabase.from("documents").select("*").order("created_at", { ascending: false }),
+    ]).then(([{ data: bData }, { data: lData }, { data: dData }]) => {
       const refs: BienRef[] = []
       for (const b of (bData ?? [])) {
         let notes: Record<string, string> = {}
@@ -812,26 +845,88 @@ export default function DocumentsPage() {
         refs.push({ id: l.id, nom: l.nom, kind: "lot", parentId: l.bien_id, parentNom: parent?.nom })
       }
       setBienRefs(refs)
+      setDocuments((dData ?? []).map(rowToDocument))
     })
   }, [])
 
-  const openAddWithFile = (nom: string) => {
-    setPrefillNom(nom)
+  const openAddWithFile = (file: File) => {
+    setPendingFile(file)
+    setPrefillNom(file.name)
     setShowAdd(true)
   }
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
     if (!window.confirm("Supprimer ce document ?")) return
+    const doc = documents.find(d => d.id === id)
+    if (doc?.file_path) {
+      await supabase.storage.from("documents").remove([doc.file_path])
+    }
+    const { error } = await supabase.from("documents").delete().eq("id", id)
+    if (error) { setDbError(error.message); return }
     setDocuments(prev => prev.filter(d => d.id !== id))
   }
 
-  const handleSaveAdd = (d: Document) => {
-    setDocuments(prev => [d, ...prev])
-    if (filterBien && filterBien !== d.bien_id) setFilterBien("")
-    if (filterCat  && filterCat  !== d.categorie) setFilterCat("")
+  const handleSaveAdd = async (d: Document) => {
+    setSaving(true)
+    setDbError("")
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) { setSaving(false); return }
+
+    let filePath: string | null = null
+    if (pendingFile) {
+      const ext = pendingFile.name.split(".").pop() ?? "bin"
+      const path = `${user.id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage
+        .from("documents").upload(path, pendingFile, { upsert: false })
+      if (!upErr) {
+        filePath = path
+        const sizeMo = pendingFile.size / 1024
+        d = { ...d, taille: sizeMo < 1024 ? `${Math.round(sizeMo)} Ko` : `${(sizeMo/1024).toFixed(1)} Mo` }
+      }
+      setPendingFile(null)
+    }
+
+    const { data, error } = await supabase.from("documents").insert({
+      user_id: user.id, bien_id: d.bien_id, bien_nom: d.bien_nom,
+      categorie: d.categorie, nom: d.nom, date: d.date,
+      description: d.description ?? null, type_fichier: d.type_fichier,
+      taille: d.taille ?? null, file_path: filePath,
+      bail_date_debut:      d.bail_date_debut      ?? null,
+      bail_date_fin:        d.bail_date_fin         ?? null,
+      bail_date_revision:   d.bail_date_revision    ?? null,
+      bail_indice_revision: d.bail_indice_revision  ?? null,
+      bail_date_preavis:    d.bail_date_preavis      ?? null,
+      bail_motif_reprise:   d.bail_motif_reprise     ?? null,
+      bail_rappel_email:    d.bail_rappel_email      ?? false,
+      bail_rappel_delai:    d.bail_rappel_email ? (d.bail_rappel_delai ?? null) : null,
+    }).select().single()
+
+    setSaving(false)
+    if (error) { setDbError(error.message); return }
+    const saved = rowToDocument(data)
+    setDocuments(prev => [saved, ...prev])
+    if (filterBien && filterBien !== saved.bien_id) setFilterBien("")
+    if (filterCat  && filterCat  !== saved.categorie) setFilterCat("")
   }
 
-  const handleSaveEdit = (updated: Document) => {
+  const handleSaveEdit = async (updated: Document) => {
+    setSaving(true)
+    setDbError("")
+    const { error } = await supabase.from("documents").update({
+      bien_id: updated.bien_id, bien_nom: updated.bien_nom,
+      categorie: updated.categorie, nom: updated.nom, date: updated.date,
+      description: updated.description ?? null, type_fichier: updated.type_fichier,
+      bail_date_debut:      updated.bail_date_debut      ?? null,
+      bail_date_fin:        updated.bail_date_fin         ?? null,
+      bail_date_revision:   updated.bail_date_revision    ?? null,
+      bail_indice_revision: updated.bail_indice_revision  ?? null,
+      bail_date_preavis:    updated.bail_date_preavis      ?? null,
+      bail_motif_reprise:   updated.bail_motif_reprise     ?? null,
+      bail_rappel_email:    updated.bail_rappel_email      ?? false,
+      bail_rappel_delai:    updated.bail_rappel_email ? (updated.bail_rappel_delai ?? null) : null,
+    }).eq("id", updated.id)
+    setSaving(false)
+    if (error) { setDbError(error.message); return }
     setDocuments(prev => prev.map(d => d.id === updated.id ? updated : d))
     setEditItem(null)
   }
@@ -871,6 +966,18 @@ export default function DocumentsPage() {
           + Ajouter
         </button>
       </div>
+
+      {/* ── Erreur ───────────────────────────────────────── */}
+      {dbError && (
+        <div style={{ background:C.rp, border:`1px solid ${C.rd}`, borderRadius:12, padding:"12px 16px", color:C.rd, fontWeight:600, fontSize:13, marginBottom:16 }}>
+          ⚠️ {dbError}
+        </div>
+      )}
+      {saving && (
+        <div style={{ background:C.gp, borderRadius:12, padding:"10px 16px", color:C.g, fontWeight:600, fontSize:13, marginBottom:16 }}>
+          ⏳ Enregistrement en cours…
+        </div>
+      )}
 
       {/* ── Rappels à venir ──────────────────────────────── */}
       <RappelsSection documents={documents} />
