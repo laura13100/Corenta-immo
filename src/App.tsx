@@ -171,7 +171,7 @@ export default function App() {
             <span style={{ fontSize: 12, fontWeight: 400, opacity: .6 }}>Immobilier</span>
           </div>
           <div style={{ fontSize: 11, color: "rgba(255,255,255,.6)", fontWeight: 500 }}>
-            Gestion · Rentabilité · Déclaration fiscale
+            Gestion · Optimisation · Rentabilité
           </div>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
