@@ -29,6 +29,11 @@ interface Locataire {
   date_entree: string; date_sortie: string; notes_text: string
   delai_preavis: string; date_revision_loyer: string
   indice_revision: string; notes_revision: string
+  date_sortie_reelle: string
+  delai_preavis_bailleur: string
+  date_limite_conge: string
+  rappel_conge_actif: boolean
+  rappel_conge_delai: string
 }
 
 interface LocataireForm {
@@ -38,6 +43,11 @@ interface LocataireForm {
   date_entree: string; date_sortie: string; notes: string
   delai_preavis: string; date_revision_loyer: string
   indice_revision: string; notes_revision: string
+  date_sortie_reelle: string
+  delai_preavis_bailleur: string
+  date_limite_conge: string
+  rappel_conge_actif: boolean
+  rappel_conge_delai: string
 }
 
 interface BienSimple {
@@ -109,7 +119,7 @@ const STATUT_LOC_LABELS: Record<StatutLocataire, string> = {
 const STATUT_LOC_COLOR: Record<StatutLocataire, string> = { "en_place": C.g, "preavis": "#ca6f1e", "parti": C.rd }
 const STATUT_LOC_BG: Record<StatutLocataire, string>    = { "en_place": C.gp, "preavis": "#fdf2e9", "parti": C.rp }
 
-const PREAVIS_LABELS: Record<string, string> = { "1m": "1 mois", "3m": "3 mois", "autre": "Autre" }
+const PREAVIS_LABELS: Record<string, string> = { "1m": "1 mois", "3m": "3 mois", "6m": "6 mois", "autre": "Autre" }
 
 function joursJusqua(dateStr: string): number | null {
   if (!dateStr) return null
@@ -177,7 +187,8 @@ function rowToLocataire(row: any): Locataire {
     email: row.email ?? "", tel: row.tel ?? "",
     type_contrat: (row.type_contrat ?? "nu") as TypeContrat,
     statut: (row.statut ?? "en_place") as StatutLocataire,
-    loyer: Number(row.loyer ?? 0), charges: Number(meta.charges ?? 0),
+    loyer: Number(row.loyer ?? 0),
+    charges: Number(row.charges ?? meta.charges ?? 0),
     depot_garantie: Number(row.depot_garantie ?? 0),
     date_entree: row.date_entree ?? "", date_sortie: row.date_sortie ?? "",
     notes_text: meta.notes_text ?? "",
@@ -185,6 +196,11 @@ function rowToLocataire(row: any): Locataire {
     date_revision_loyer: row.date_revision_loyer ?? "",
     indice_revision: row.indice_revision ?? "",
     notes_revision: row.notes_revision ?? "",
+    date_sortie_reelle: row.date_sortie_reelle ?? "",
+    delai_preavis_bailleur: row.delai_preavis_bailleur ?? "",
+    date_limite_conge: row.date_limite_conge ?? "",
+    rappel_conge_actif: row.rappel_conge_actif ?? false,
+    rappel_conge_delai: row.rappel_conge_delai ?? "",
   }
 }
 
@@ -317,6 +333,11 @@ function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initi
     loyer: "", charges: "", depot_garantie: "",
     date_entree: "", date_sortie: "", notes: "",
     delai_preavis: "", date_revision_loyer: "", indice_revision: "", notes_revision: "",
+    date_sortie_reelle: "",
+    delai_preavis_bailleur: "",
+    date_limite_conge: "",
+    rappel_conge_actif: false,
+    rappel_conge_delai: "",
   }
   const [f, setF] = useState<LocataireForm>({ ...DEF, ...initial })
   const set = (k: keyof LocataireForm) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -347,7 +368,11 @@ function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initi
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <FieldInput label="Date d'entrée" type="date" value={f.date_entree} onChange={set("date_entree")} />
-        <FieldInput label="Date de sortie" type="date" value={f.date_sortie} onChange={set("date_sortie")} />
+        <FieldInput label="Date de fin du bail" type="date" value={f.date_sortie} onChange={set("date_sortie")} />
+      </div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <FieldInput label="Date de sortie réelle" type="date" value={f.date_sortie_reelle} onChange={set("date_sortie_reelle")} />
+        <div />
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12 }}>
         <FieldInput label="Loyer HC (€)" type="number" value={f.loyer} onChange={set("loyer")} />
@@ -375,6 +400,46 @@ function AddLocataireModal({ onClose, onSave, title = "Nouveau locataire", initi
             <option value="autre">Autre</option>
           </FieldSelect>
           <FieldInput label="Notes révision" value={f.notes_revision} onChange={set("notes_revision")} />
+        </div>
+      </div>
+      <div style={{ borderTop:`1.5px solid ${C.br}`, marginTop:4, paddingTop:14, marginBottom:12 }}>
+        <div style={{ fontSize:11, fontWeight:800, color:C.g, textTransform:"uppercase", letterSpacing:".07em", marginBottom:12 }}>
+          🔔 Préavis bailleur & congé
+        </div>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+          <FieldSelect label="Délai préavis bailleur" value={f.delai_preavis_bailleur} onChange={set("delai_preavis_bailleur")}>
+            <option value="">— Non défini</option>
+            <option value="1m">1 mois</option>
+            <option value="3m">3 mois</option>
+            <option value="6m">6 mois</option>
+            <option value="autre">Autre</option>
+          </FieldSelect>
+          <FieldInput label="Date limite pour donner congé" type="date" value={f.date_limite_conge} onChange={set("date_limite_conge")} />
+        </div>
+        <div style={{ background:C.cr, borderRadius:10, padding:"12px 14px" }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom: f.rappel_conge_actif ? 12 : 0 }}>
+            <input type="checkbox" id="rappel-conge" checked={f.rappel_conge_actif}
+              onChange={e => setF(p => ({ ...p, rappel_conge_actif: e.target.checked }))}
+              style={{ width:16, height:16, accentColor:C.g, cursor:"pointer" }} />
+            <label htmlFor="rappel-conge" style={{ fontSize:13, fontWeight:600, color:C.tx, cursor:"pointer" }}>
+              📧 Rappel avant date limite congé
+            </label>
+          </div>
+          {f.rappel_conge_actif && (
+            <div style={{ display:"flex", gap:8 }}>
+              {(["15j","1m","3m"] as const).map(v => {
+                const label = v === "15j" ? "15 jours" : v === "1m" ? "1 mois" : "3 mois"
+                const active = f.rappel_conge_delai === v
+                return (
+                  <button key={v} type="button"
+                    onClick={() => setF(p => ({ ...p, rappel_conge_delai: v }))}
+                    style={{ flex:1, padding:"9px 0", borderRadius:9, border:`2px solid ${active ? C.g : C.br}`, background:active ? C.gp : C.wh, color:active ? C.g : C.tm, fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"inherit" }}>
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
       <SaveBtn label="Enregistrer" disabled={!f.nom.trim()} onClick={() => { if (f.nom.trim()) onSave(f) }} />
@@ -442,7 +507,8 @@ function LocataireSection({ mode_exploitation, locataires, onAdd, onEdit, onDele
           {active.charges > 0 && <InfoRow label="Charges" value={euro(active.charges)} />}
           {active.depot_garantie > 0 && <InfoRow label="Dépôt de garantie" value={euro(active.depot_garantie)} />}
           {active.date_entree && <InfoRow label="Entrée" value={active.date_entree.split("-").reverse().join("/")} />}
-          {active.date_sortie && <InfoRow label="Sortie prévue" value={active.date_sortie.split("-").reverse().join("/")} />}
+          {active.date_sortie && <InfoRow label="Fin du bail" value={active.date_sortie.split("-").reverse().join("/")} />}
+          {active.date_sortie_reelle && <InfoRow label="Sortie réelle" value={active.date_sortie_reelle.split("-").reverse().join("/")} />}
           {active.date_revision_loyer && (() => {
             const days = joursJusqua(active.date_revision_loyer)
             const urgent  = days !== null && days >= 0 && days <= 30
@@ -468,6 +534,45 @@ function LocataireSection({ mode_exploitation, locataires, onAdd, onEdit, onDele
           {active.delai_preavis && (
             <div style={{ marginTop:6, fontSize:12, color:C.tm }}>
               📢 Préavis locataire : <strong>{PREAVIS_LABELS[active.delai_preavis] ?? active.delai_preavis}</strong>
+            </div>
+          )}
+          {active.date_limite_conge && (() => {
+            const days = joursJusqua(active.date_limite_conge)
+            const urgent  = days !== null && days >= 0 && days <= 30
+            const warning = days !== null && days >= 0 && days <= 90
+            const past    = days !== null && days < 0
+            return (
+              <div style={{ marginTop:10, padding:"10px 12px", borderRadius:10, background:urgent?C.rp:warning?"#fef9e7":past?C.cr2:C.gp, border:`1px solid ${urgent?C.rd:warning?"#b7860b":past?C.cr2:C.g}33` }}>
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                  <span style={{ fontSize:12, fontWeight:700, color:urgent?C.rd:warning?"#b7860b":past?C.tm:C.g }}>
+                    📢 Date limite pour donner congé
+                  </span>
+                  <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                    <span style={{ fontSize:13, fontWeight:700, color:C.tx }}>{active.date_limite_conge.split("-").reverse().join("/")}</span>
+                    {days !== null && (urgent || warning) && (
+                      <span style={{ fontSize:10, fontWeight:800, padding:"1px 8px", borderRadius:10, background:urgent?C.rd:"#b7860b", color:"#fff" }}>
+                        {days === 0 ? "Aujourd'hui" : `J−${days}`}
+                      </span>
+                    )}
+                    {past && <span style={{ fontSize:10, fontWeight:800, padding:"1px 8px", borderRadius:10, background:C.cr2, color:C.tm }}>Passé</span>}
+                  </div>
+                </div>
+                {active.delai_preavis_bailleur && (
+                  <div style={{ fontSize:11, color:C.tm, marginTop:3 }}>
+                    Préavis bailleur : <strong>{PREAVIS_LABELS[active.delai_preavis_bailleur] ?? active.delai_preavis_bailleur}</strong>
+                  </div>
+                )}
+                {active.rappel_conge_actif && active.rappel_conge_delai && (
+                  <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>
+                    📧 Rappel {active.rappel_conge_delai === "15j" ? "15 jours" : active.rappel_conge_delai === "1m" ? "1 mois" : "3 mois"} avant
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          {active.delai_preavis_bailleur && !active.date_limite_conge && (
+            <div style={{ marginTop:6, fontSize:12, color:C.tm }}>
+              🏠 Préavis bailleur : <strong>{PREAVIS_LABELS[active.delai_preavis_bailleur] ?? active.delai_preavis_bailleur}</strong>
             </div>
           )}
           {active.notes_text && <div style={{ fontSize:12, color:C.tm, marginTop:8, fontStyle:"italic" }}>{active.notes_text}</div>}
@@ -646,59 +751,51 @@ function PlaceholderTab({ tab }: { tab: string }) {
   )
 }
 
-// ── Documents associés (démo) ──────────────────────────────
+// ── Documents associés — source Supabase ──────────────────
 
-type DemoCategorie = "bail" | "diagnostic" | "facture" | "assurance" | "impot" | "autre"
-const DEMO_CAT_EMOJI: Record<DemoCategorie, string> = {
-  bail: "📜", diagnostic: "🔍", facture: "🧾", assurance: "🛡️", impot: "🏛️", autre: "📄",
-}
-const DEMO_CAT_LABEL: Record<DemoCategorie, string> = {
-  bail: "Bail", diagnostic: "Diagnostic", facture: "Facture",
-  assurance: "Assurance", impot: "Impôt", autre: "Autre",
-}
-const DEMO_CAT_COLOR: Record<DemoCategorie, string> = {
-  bail: "#2d5b3d", diagnostic: "#2471a3", facture: "#ca6f1e",
-  assurance: "#7d3c98", impot: "#b7860b", autre: "#6b8c74",
-}
-const DEMO_CAT_BG: Record<DemoCategorie, string> = {
-  bail: "#e6efe9", diagnostic: "#eaf4fb", facture: "#fdf2e9",
-  assurance: "#f4ecf7", impot: "#fef9e7", autre: "#eeebe3",
-}
-interface DemoDoc { id: string; bien_nom: string; categorie: DemoCategorie; nom: string; date: string; description?: string }
-const DEMO_DOCS: DemoDoc[] = [
-  { id:"d01", bien_nom:"Appartement Gambetta", categorie:"bail",        nom:"Bail meublé — Sophie Martin",       date:"2024-09-01", description:"Bail meublé 1 an renouvelable" },
-  { id:"d02", bien_nom:"Appartement Gambetta", categorie:"diagnostic",  nom:"DPE 2024 — Gambetta",               date:"2024-08-15", description:"Classe C" },
-  { id:"d03", bien_nom:"Appartement Gambetta", categorie:"assurance",   nom:"Attestation PNO 2026",              date:"2026-01-01" },
-  { id:"d04", bien_nom:"Appartement Gambetta", categorie:"impot",       nom:"Taxe foncière 2025",                date:"2025-09-20", description:"1 240 €" },
-  { id:"d05", bien_nom:"Appartement Gambetta", categorie:"facture",     nom:"Facture plombier mars 2026",        date:"2026-03-12", description:"320 €" },
-  { id:"d06", bien_nom:"Studio Confluence",    categorie:"bail",        nom:"Bail meublé — Thomas Durand",       date:"2025-05-01" },
-  { id:"d07", bien_nom:"Studio Confluence",    categorie:"diagnostic",  nom:"DPE 2023 — Confluence",             date:"2023-04-20", description:"Classe D" },
-  { id:"d08", bien_nom:"Studio Confluence",    categorie:"assurance",   nom:"Attestation PNO 2026",              date:"2026-01-01" },
-  { id:"d09", bien_nom:"Studio Confluence",    categorie:"facture",     nom:"Facture peinture fév. 2026",        date:"2026-02-22", description:"1 200 €" },
-  { id:"d10", bien_nom:"Garage Bellecour",     categorie:"bail",        nom:"Bail parking — Marie Blanc",        date:"2023-06-01", description:"Reconduit tacitement" },
-  { id:"d11", bien_nom:"Garage Bellecour",     categorie:"assurance",   nom:"Attestation assurance garage 2026", date:"2026-01-01" },
-  { id:"d12", bien_nom:"T2 Croix-Rousse",     categorie:"diagnostic",  nom:"DPE 2024 — Croix-Rousse",          date:"2024-11-05", description:"Classe E" },
-  { id:"d13", bien_nom:"T2 Croix-Rousse",     categorie:"facture",     nom:"Facture chauffe-eau fév. 2026",     date:"2026-02-18", description:"1 200 €" },
-  { id:"d14", bien_nom:"T2 Croix-Rousse",     categorie:"facture",     nom:"Facture peinture mars 2026",        date:"2026-03-10", description:"450 €" },
-]
+type DocCat = "bail" | "diagnostic" | "facture" | "assurance" | "impot" | "autre"
+const DOC_CAT_EMOJI:  Record<DocCat, string> = { bail:"📜", diagnostic:"🔍", facture:"🧾", assurance:"🛡️", impot:"🏛️", autre:"📄" }
+const DOC_CAT_LABEL:  Record<DocCat, string> = { bail:"Bail", diagnostic:"Diagnostic", facture:"Facture", assurance:"Assurance", impot:"Impôt", autre:"Autre" }
+const DOC_CAT_COLOR:  Record<DocCat, string> = { bail:"#2d5b3d", diagnostic:"#2471a3", facture:"#ca6f1e", assurance:"#7d3c98", impot:"#b7860b", autre:"#6b8c74" }
+const DOC_CAT_BG:     Record<DocCat, string> = { bail:"#e6efe9", diagnostic:"#eaf4fb", facture:"#fdf2e9", assurance:"#f4ecf7", impot:"#fef9e7", autre:"#eeebe3" }
+const DOC_CAT_ORDER:  DocCat[] = ["bail","facture","assurance","diagnostic","impot","autre"]
 
-const fmtDate = (d: string) => { const [y,m,j] = d.split("-"); return `${j}/${m}/${y}` }
+interface BienDoc { id: string; nom: string; date: string; categorie: DocCat; file_path?: string; description?: string }
 
-function DocAssocies({ nomBien }: { nomBien: string }) {
-  const docs = DEMO_DOCS.filter(d => d.bien_nom === nomBien)
+function BienDocuments({ bienId }: { bienId: string }) {
+  const [docs, setDocs]     = useState<BienDoc[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.from("documents")
+      .select("id, nom, date, categorie, file_path, description")
+      .eq("bien_id", bienId)
+      .order("date", { ascending: false })
+      .then(({ data }) => {
+        setDocs((data ?? []).map(r => ({
+          id: r.id, nom: r.nom,
+          date: typeof r.date === "string" ? r.date.slice(0, 10) : String(r.date),
+          categorie: (r.categorie ?? "autre") as DocCat,
+          file_path: r.file_path ?? undefined,
+          description: r.description ?? undefined,
+        })))
+        setLoading(false)
+      })
+  }, [bienId])
+
+  if (loading) return <div style={{ textAlign:"center", padding:"40px 20px", color:C.tm }}>Chargement…</div>
 
   if (docs.length === 0) {
     return (
-      <div style={{ background:"#fff", borderRadius:14, padding:"48px 20px", border:"1px solid #dde8e0", textAlign:"center" }}>
+      <div style={{ background:C.wh, borderRadius:14, padding:"48px 20px", border:`1px solid ${C.br}`, textAlign:"center" }}>
         <div style={{ fontSize:40, marginBottom:12 }}>📎</div>
-        <div style={{ fontWeight:700, fontSize:15, color:"#1a2a1f", marginBottom:6 }}>Aucun document</div>
-        <div style={{ color:"#6b8c74", fontSize:13 }}>Ajoutez des documents depuis l'onglet Documents.</div>
+        <div style={{ fontWeight:700, fontSize:15, color:C.tx, marginBottom:6 }}>Aucun document</div>
+        <div style={{ color:C.tm, fontSize:13 }}>Ajoutez des documents depuis l'onglet Documents.</div>
       </div>
     )
   }
 
-  const CAT_ORDER: DemoCategorie[] = ["bail","facture","assurance","diagnostic","impot","autre"]
-  const byCat: Partial<Record<DemoCategorie, DemoDoc[]>> = {}
+  const byCat: Partial<Record<DocCat, BienDoc[]>> = {}
   for (const d of docs) {
     if (!byCat[d.categorie]) byCat[d.categorie] = []
     byCat[d.categorie]!.push(d)
@@ -707,38 +804,43 @@ function DocAssocies({ nomBien }: { nomBien: string }) {
   return (
     <div>
       <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
-        <span style={{ fontWeight:700, fontSize:14, color:"#1a2a1f" }}>📎 Documents associés</span>
-        <span style={{ fontSize:11, fontWeight:700, background:"#e6efe9", color:"#2d5b3d", padding:"2px 9px", borderRadius:10 }}>{docs.length}</span>
+        <span style={{ fontWeight:700, fontSize:14, color:C.tx }}>📎 Documents associés</span>
+        <span style={{ fontSize:11, fontWeight:700, background:C.gp, color:C.g, padding:"2px 9px", borderRadius:10 }}>{docs.length}</span>
       </div>
-      {CAT_ORDER.filter(cat => (byCat[cat]?.length ?? 0) > 0).map(cat => (
+      {DOC_CAT_ORDER.filter(cat => (byCat[cat]?.length ?? 0) > 0).map(cat => (
         <div key={cat} style={{ marginBottom:14 }}>
           <div style={{ display:"flex", alignItems:"center", gap:5, marginBottom:8 }}>
-            <span style={{ fontSize:12 }}>{DEMO_CAT_EMOJI[cat]}</span>
-            <span style={{ fontSize:11, fontWeight:700, color:DEMO_CAT_COLOR[cat], textTransform:"uppercase", letterSpacing:".06em" }}>
-              {DEMO_CAT_LABEL[cat]}
-            </span>
-            <span style={{ fontSize:10, fontWeight:700, color:DEMO_CAT_COLOR[cat], background:DEMO_CAT_BG[cat], padding:"1px 6px", borderRadius:8 }}>
-              {byCat[cat]!.length}
-            </span>
+            <span style={{ fontSize:12 }}>{DOC_CAT_EMOJI[cat]}</span>
+            <span style={{ fontSize:11, fontWeight:700, color:DOC_CAT_COLOR[cat], textTransform:"uppercase", letterSpacing:".06em" }}>{DOC_CAT_LABEL[cat]}</span>
+            <span style={{ fontSize:10, fontWeight:700, color:DOC_CAT_COLOR[cat], background:DOC_CAT_BG[cat], padding:"1px 6px", borderRadius:8 }}>{byCat[cat]!.length}</span>
           </div>
           {byCat[cat]!.map(d => (
-            <div key={d.id} style={{ background:"#fff", borderRadius:10, padding:"11px 14px", marginBottom:6, border:"1.5px solid #dde8e0", display:"flex", alignItems:"center", gap:12 }}>
-              <div style={{ width:38, height:38, borderRadius:9, background:DEMO_CAT_BG[cat], display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>
-                {DEMO_CAT_EMOJI[cat]}
+            <div key={d.id} style={{ background:C.wh, borderRadius:10, padding:"11px 14px", marginBottom:6, border:`1.5px solid ${C.br}`, display:"flex", alignItems:"center", gap:12 }}>
+              <div style={{ width:38, height:38, borderRadius:9, background:DOC_CAT_BG[cat], display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, flexShrink:0 }}>
+                {DOC_CAT_EMOJI[cat]}
               </div>
               <div style={{ flex:1, minWidth:0 }}>
-                <div style={{ fontWeight:700, fontSize:13, color:"#1a2a1f" }}>{d.nom}</div>
-                <div style={{ fontSize:11, color:"#6b8c74", marginTop:2 }}>
-                  📅 {fmtDate(d.date)}{d.description ? ` · ${d.description}` : ""}
+                <div style={{ fontWeight:700, fontSize:13, color:C.tx }}>{d.nom}</div>
+                <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>
+                  📅 {d.date.split("-").reverse().join("/")}{d.description ? ` · ${d.description}` : ""}
                 </div>
               </div>
+              {d.file_path && (
+                <button
+                  onClick={async () => {
+                    const { data, error } = await supabase.storage.from("documents").createSignedUrl(d.file_path!, 3600)
+                    if (error || !data?.signedUrl) { alert("Impossible d'ouvrir le fichier."); return }
+                    window.open(data.signedUrl, "_blank")
+                  }}
+                  style={{ flexShrink:0, padding:"5px 10px", borderRadius:7, border:`1px solid ${C.br}`, background:C.gp, color:C.g, fontSize:11, fontWeight:700, cursor:"pointer", fontFamily:"inherit" }}
+                >
+                  👁 Voir
+                </button>
+              )}
             </div>
           ))}
         </div>
       ))}
-      <div style={{ fontSize:11, color:"#6b8c74", marginTop:8, padding:"10px 14px", background:"#f7f4ee", borderRadius:9 }}>
-        Données de démo. Gérez tous les documents depuis l'onglet Documents.
-      </div>
     </div>
   )
 }
@@ -796,7 +898,7 @@ function BienSimpleDetail({ bien, onBack, onEdit, onDelete, onAddLocataire, onEd
         </div>
       )}
       {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
-      {tab === "documents" && <DocAssocies nomBien={bien.nom} />}
+      {tab === "documents" && <BienDocuments bienId={bien.id} />}
     </div>
   )
 }
@@ -856,7 +958,7 @@ function LotDetail({ lot, immeuble, onBack, onEdit, onDelete, onAddLocataire, on
         </div>
       )}
       {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
-      {tab === "documents" && <DocAssocies nomBien={lot.nom} />}
+      {tab === "documents" && <BienDocuments bienId={lot.id} />}
     </div>
   )
 }
@@ -950,7 +1052,7 @@ function ImmeubleDetail({ immeuble, onBack, onAddLot, onClickLot, onEdit, onDele
         </div>
       )}
       {(tab === "recettes" || tab === "depenses") && <PlaceholderTab tab={tab} />}
-      {tab === "documents" && <DocAssocies nomBien={immeuble.nom} />}
+      {tab === "documents" && <BienDocuments bienId={immeuble.id} />}
     </div>
   )
 }
@@ -1315,14 +1417,20 @@ export default function BiensPage() {
       type_contrat:  f.type_contrat,
       statut:        f.statut,
       loyer:         f.loyer ? Number(f.loyer) : null,
+      charges:       f.charges ? Number(f.charges) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
       date_entree:         f.date_entree || null,
       date_sortie:         f.date_sortie || null,
-      notes:               JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      notes:               JSON.stringify({ notes_text: f.notes.trim() || null }),
       delai_preavis:       f.delai_preavis || null,
       date_revision_loyer: f.date_revision_loyer || null,
       indice_revision:     f.indice_revision || null,
       notes_revision:      f.notes_revision || null,
+      date_sortie_reelle:      f.date_sortie_reelle || null,
+      delai_preavis_bailleur:  f.delai_preavis_bailleur || null,
+      date_limite_conge:       f.date_limite_conge || null,
+      rappel_conge_actif:      f.rappel_conge_actif,
+      rappel_conge_delai:      f.rappel_conge_actif ? (f.rappel_conge_delai || null) : null,
     }).select().single()
     if (error) { setDbError(error.message); return }
     const newLoc = rowToLocataire(data)
@@ -1344,14 +1452,20 @@ export default function BiensPage() {
       type_contrat:  f.type_contrat,
       statut:        f.statut,
       loyer:         f.loyer ? Number(f.loyer) : null,
+      charges:       f.charges ? Number(f.charges) : null,
       depot_garantie: f.depot_garantie ? Number(f.depot_garantie) : null,
       date_entree:         f.date_entree || null,
       date_sortie:         f.date_sortie || null,
-      notes:               JSON.stringify({ charges: f.charges || null, notes_text: f.notes.trim() || null }),
+      notes:               JSON.stringify({ notes_text: f.notes.trim() || null }),
       delai_preavis:       f.delai_preavis || null,
       date_revision_loyer: f.date_revision_loyer || null,
       indice_revision:     f.indice_revision || null,
       notes_revision:      f.notes_revision || null,
+      date_sortie_reelle:      f.date_sortie_reelle || null,
+      delai_preavis_bailleur:  f.delai_preavis_bailleur || null,
+      date_limite_conge:       f.date_limite_conge || null,
+      rappel_conge_actif:      f.rappel_conge_actif,
+      rappel_conge_delai:      f.rappel_conge_actif ? (f.rappel_conge_delai || null) : null,
     }).eq("id", loc.id).select().single()
     if (error) { setDbError(error.message); return }
     const updatedLoc = rowToLocataire(data)
@@ -1428,6 +1542,11 @@ export default function BiensPage() {
                 date_revision_loyer: editLocataireState.loc.date_revision_loyer,
                 indice_revision: editLocataireState.loc.indice_revision,
                 notes_revision: editLocataireState.loc.notes_revision,
+                date_sortie_reelle: editLocataireState.loc.date_sortie_reelle,
+                delai_preavis_bailleur: editLocataireState.loc.delai_preavis_bailleur,
+                date_limite_conge: editLocataireState.loc.date_limite_conge,
+                rappel_conge_actif: editLocataireState.loc.rappel_conge_actif,
+                rappel_conge_delai: editLocataireState.loc.rappel_conge_delai,
               }}
             />
           )}
@@ -1504,6 +1623,11 @@ export default function BiensPage() {
                 date_revision_loyer: editLocataireState.loc.date_revision_loyer,
                 indice_revision: editLocataireState.loc.indice_revision,
                 notes_revision: editLocataireState.loc.notes_revision,
+                date_sortie_reelle: editLocataireState.loc.date_sortie_reelle,
+                delai_preavis_bailleur: editLocataireState.loc.delai_preavis_bailleur,
+                date_limite_conge: editLocataireState.loc.date_limite_conge,
+                rappel_conge_actif: editLocataireState.loc.rappel_conge_actif,
+                rappel_conge_delai: editLocataireState.loc.rappel_conge_delai,
               }}
             />
           )}

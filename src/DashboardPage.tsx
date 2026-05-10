@@ -36,6 +36,9 @@ interface RawDepense {
 interface RawLocataire {
   id: string; bien_id: string; lot_id: string | null
   statut: string; date_sortie: string | null
+  prenom: string | null; nom: string
+  date_limite_conge: string | null
+  date_revision_loyer: string | null
 }
 interface RawCredit {
   id: string; bien_id: string; lot_id: string | null
@@ -46,6 +49,15 @@ interface RawCredit {
 }
 
 interface Alert { label: string; days: number; urgent: boolean }
+
+interface UrgenceItem {
+  type: "fin_bail" | "conge" | "revision" | "vacant"
+  bienNom: string
+  locataireNom?: string
+  date?: string
+  days?: number
+  urgent: boolean
+}
 
 interface BienStat {
   id: string; nom: string; adresse: string | null; type: string
@@ -76,8 +88,6 @@ interface BienStat {
   alerts: Alert[]
 }
 
-// GlobalStat stocke explicitement locsActifs et lotsTotal
-// pour l'affichage de la barre d'occupation globale
 interface GlobalStat {
   nbBiens: number
   revAnnuel: number; depAnnuel: number
@@ -88,6 +98,7 @@ interface GlobalStat {
   mensualiteCredit: number
   detteRestante:   number
   biens: BienStat[]
+  urgences: UrgenceItem[]
 }
 
 // ── Helpers ────────────────────────────────────────────────
@@ -159,7 +170,7 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         .select("id, bien_id, lot_id, categorie, montant, date_depense, deductible")
         .gte("date_depense", `${an}-01-01`)
         .lte("date_depense", `${an}-12-31`),
-      supabase.from("locataires").select("id, bien_id, lot_id, statut, date_sortie"),
+      supabase.from("locataires").select("id, bien_id, lot_id, statut, date_sortie, prenom, nom, date_limite_conge, date_revision_loyer"),
       supabase.from("credits")
         .select("id, bien_id, lot_id, banque, statut, mensualite_hors_assurance, assurance_mensuelle, capital_rembourse_mensuel, interets_mensuels, capital_restant_du")
         .eq("statut", "actif"),
@@ -191,6 +202,56 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
         alertsByBien.get(loc.bien_id)!.push({ label: "Fin de bail", days, urgent: days <= 30 })
       }
     }
+
+    // ── Urgences globales ──────────────────────────────────────────────────
+    const urgences: UrgenceItem[] = []
+    const bienNomById = new Map<string, string>(rawBiens.map(b => [b.id, b.nom]))
+    const lotNomById  = new Map<string, string>(rawLots.map(l => [l.id, l.nom]))
+
+    for (const loc of rawLoc) {
+      if (loc.statut === "parti") continue
+      const bienNom  = loc.lot_id
+        ? `${bienNomById.get(loc.bien_id) ?? "—"} › ${lotNomById.get(loc.lot_id) ?? "—"}`
+        : (bienNomById.get(loc.bien_id) ?? "—")
+      const locNom = `${loc.prenom ?? ""} ${loc.nom}`.trim()
+
+      if (loc.date_sortie) {
+        const d = daysUntil(loc.date_sortie)
+        if (d >= 0 && d <= 120)
+          urgences.push({ type: "fin_bail", bienNom, locataireNom: locNom, date: loc.date_sortie, days: d, urgent: d <= 30 })
+      }
+      if (loc.date_limite_conge) {
+        const d = daysUntil(loc.date_limite_conge)
+        if (d >= -7 && d <= 90)
+          urgences.push({ type: "conge", bienNom, locataireNom: locNom, date: loc.date_limite_conge, days: d, urgent: d <= 30 })
+      }
+      if (loc.date_revision_loyer) {
+        const d = daysUntil(loc.date_revision_loyer)
+        if (d >= 0 && d <= 90)
+          urgences.push({ type: "revision", bienNom, locataireNom: locNom, date: loc.date_revision_loyer, days: d, urgent: d <= 30 })
+      }
+    }
+    // Biens/lots vacants (pas de locataire actif et pas airbnb)
+    for (const b of rawBiens) {
+      const meta = parseMeta(b.notes)
+      if (meta.mode_exploitation === "airbnb" || meta.kind === "immeuble") continue
+      const hasActive = rawLoc.some(l => l.bien_id === b.id && !l.lot_id && l.statut !== "parti")
+      if (!hasActive)
+        urgences.push({ type: "vacant", bienNom: b.nom, urgent: false })
+    }
+    for (const lot of rawLots) {
+      const hasActive = rawLoc.some(l => l.lot_id === lot.id && l.statut !== "parti")
+      if (!hasActive) {
+        const imm = bienNomById.get(lot.bien_id)
+        urgences.push({ type: "vacant", bienNom: imm ? `${imm} › ${lot.nom}` : lot.nom, urgent: false })
+      }
+    }
+    urgences.sort((a, b) => {
+      if (a.urgent && !b.urgent) return -1
+      if (!a.urgent && b.urgent) return 1
+      if (a.days != null && b.days != null) return a.days - b.days
+      return 0
+    })
 
     // ── Calcul par bien ──────────────────────────────────────────────────
     // Remarque : toutes les recettes et dépenses d'un lot ont bien_id = immeuble parent.
@@ -311,6 +372,7 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
       mensualiteCredit: mensualiteCreditG,
       detteRestante:    detteRestanteG,
       biens: bienStats,
+      urgences,
     })
     setLoading(false)
   }
@@ -377,6 +439,53 @@ export default function DashboardPage({ an, onGoBiens }: { an: number; onGoBiens
           ))}
         </div>
       </div>
+
+      {/* ── Urgent / À faire ──────────────────────────────── */}
+      {stats.urgences.length > 0 && (
+        <div style={{ background:C.wh, borderRadius:14, border:`1.5px solid ${C.br}`, padding:"18px 20px", marginBottom:14 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14 }}>
+            <span style={{ fontWeight:800, fontSize:15, color:C.tx }}>⚡ Urgent / À faire</span>
+            <span style={{
+              fontSize:11, fontWeight:700, padding:"2px 9px", borderRadius:10,
+              background: stats.urgences.some(u => u.urgent) ? C.rp : C.dp,
+              color:      stats.urgences.some(u => u.urgent) ? C.rd : C.gd,
+            }}>
+              {stats.urgences.length}
+            </span>
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:7 }}>
+            {stats.urgences.map((u, i) => {
+              const URGENCE_META = {
+                fin_bail: { icon:"🏠", label:"Fin du bail", bg: u.urgent ? C.rp : C.dp, color: u.urgent ? C.rd : C.gd },
+                conge:    { icon:"📢", label:"Limite congé bailleur", bg: u.urgent ? C.rp : C.dp, color: u.urgent ? C.rd : C.gd },
+                revision: { icon:"📈", label:"Révision loyer", bg: C.dp, color: C.gd },
+                vacant:   { icon:"🔴", label:"Bien vacant", bg: C.rp, color: C.rd },
+              }
+              const m = URGENCE_META[u.type]
+              return (
+                <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", padding:"10px 14px", borderRadius:10, background:m.bg, border:`1px solid ${m.color}33`, gap:12 }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:2 }}>
+                      <span style={{ fontSize:13 }}>{m.icon}</span>
+                      <span style={{ fontSize:12, fontWeight:700, color:m.color, textTransform:"uppercase", letterSpacing:".05em" }}>{m.label}</span>
+                    </div>
+                    <div style={{ fontSize:13, fontWeight:700, color:C.tx }}>{u.bienNom}</div>
+                    {u.locataireNom && <div style={{ fontSize:11, color:C.tm, marginTop:1 }}>👤 {u.locataireNom}</div>}
+                  </div>
+                  {u.date && u.days != null && (
+                    <div style={{ textAlign:"right", flexShrink:0 }}>
+                      <div style={{ fontSize:14, fontWeight:900, color:m.color }}>
+                        {u.days < 0 ? "Dépassé" : u.days === 0 ? "Aujourd'hui" : `J−${u.days}`}
+                      </div>
+                      <div style={{ fontSize:11, color:C.tm }}>{u.date.split("-").reverse().join("/")}</div>
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* ── Taux d'occupation global (si plusieurs unités) ── */}
       {stats.lotsTotal > 1 && (

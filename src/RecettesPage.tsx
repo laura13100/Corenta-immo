@@ -45,6 +45,9 @@ interface BienOption {
   bien_id: string
   lot_id: string | null
   display_nom: string
+  loyer_hc?: number
+  charges?: number
+  locataire_nom?: string
 }
 
 interface ImmeubleGroup { id: string; nom: string; lots: BienOption[] }
@@ -52,10 +55,19 @@ interface ImmeubleGroup { id: string; nom: string; lots: BienOption[] }
 interface FormState {
   target: string
   type: TypeRecette
+  loyer_hc: string
+  charges_rec: string
   montant: string
   date: string
   locataire_nom: string
   description: string
+}
+
+interface ActiveLoc {
+  id: string; bien_id: string; lot_id: string | null
+  prenom: string; nom: string
+  loyer_hc: number; charges: number
+  bien_nom: string
 }
 
 const today = new Date().toISOString().slice(0, 10)
@@ -137,17 +149,58 @@ function RecetteModal({ onClose, onSave, initialValues, bienOptions, immeubleGro
   immeubleGroups: ImmeubleGroup[]
 }) {
   const defaultTarget = bienOptions[0]?.value ?? ""
-  const [form, setForm] = useState<FormState>({
-    target:       initialValues
-      ? (initialValues.lot_id ? `${initialValues.bien_id}|${initialValues.lot_id}` : initialValues.bien_id)
-      : defaultTarget,
-    type:         initialValues?.type            ?? "loyer",
-    montant:      initialValues?.montant.toString() ?? "",
-    date:         initialValues?.date            ?? today,
-    locataire_nom: initialValues?.locataire_nom  ?? "",
-    description:  initialValues?.description     ?? "",
+  const getOpt = (target: string) => bienOptions.find(o => o.value === target)
+
+  const initTarget = initialValues
+    ? (initialValues.lot_id ? `${initialValues.bien_id}|${initialValues.lot_id}` : initialValues.bien_id)
+    : defaultTarget
+
+  const [form, setForm] = useState<FormState>(() => {
+    const opt = getOpt(initTarget)
+    return {
+      target:       initTarget,
+      type:         initialValues?.type ?? "loyer",
+      loyer_hc:     initialValues?.montant ? String(initialValues.montant) : (opt?.loyer_hc ? String(opt.loyer_hc) : ""),
+      charges_rec:  opt?.charges ? String(opt.charges) : "",
+      montant:      initialValues?.montant.toString() ?? "",
+      date:         initialValues?.date ?? today,
+      locataire_nom: initialValues?.locataire_nom ?? (opt?.locataire_nom ?? ""),
+      description:  initialValues?.description ?? "",
+    }
   })
+
   const set = (k: keyof FormState) => (v: string) => setForm(f => ({ ...f, [k]: v }))
+
+  // Quand le bien change, pré-remplir loyer/charges/locataire
+  const handleTargetChange = (v: string) => {
+    const opt = getOpt(v)
+    setForm(f => ({
+      ...f,
+      target: v,
+      loyer_hc:     opt?.loyer_hc ? String(opt.loyer_hc) : "",
+      charges_rec:  opt?.charges  ? String(opt.charges)  : "",
+      locataire_nom: opt?.locataire_nom ?? f.locataire_nom,
+      montant: f.type === "loyer"   ? (opt?.loyer_hc ? String(opt.loyer_hc) : f.montant)
+             : f.type === "charges" ? (opt?.charges  ? String(opt.charges)  : f.montant)
+             : f.montant,
+    }))
+  }
+
+  // Quand type change, recalcule montant automatiquement
+  const handleTypeChange = (t: TypeRecette) => {
+    const opt = getOpt(form.target)
+    setForm(f => ({
+      ...f,
+      type: t,
+      montant: t === "loyer"   ? (opt?.loyer_hc ? String(opt.loyer_hc) : f.montant)
+             : t === "charges" ? (opt?.charges  ? String(opt.charges)  : f.montant)
+             : f.montant,
+    }))
+  }
+
+  const lhc   = parseFloat(form.loyer_hc) || 0
+  const chrg  = parseFloat(form.charges_rec) || 0
+  const isLoyerType = form.type === "loyer" || form.type === "charges"
   const canSave = !!form.montant && !!form.date && !!form.target
 
   return (
@@ -161,7 +214,7 @@ function RecetteModal({ onClose, onSave, initialValues, bienOptions, immeubleGro
         {/* Type */}
         <div style={{ display:"flex", gap:6, marginBottom:16, flexWrap:"wrap" }}>
           {(Object.entries(TYPE_CONFIG) as [TypeRecette, typeof TYPE_CONFIG[TypeRecette]][]).map(([k, v]) => (
-            <button key={k} onClick={() => set("type")(k)} style={{
+            <button key={k} onClick={() => handleTypeChange(k as TypeRecette)} style={{
               flex:"1 1 auto", padding:"8px 6px", borderRadius:9,
               border:`2px solid ${form.type === k ? v.color : C.br}`,
               background: form.type === k ? v.bg : C.wh,
@@ -174,15 +227,42 @@ function RecetteModal({ onClose, onSave, initialValues, bienOptions, immeubleGro
         {/* Bien / Lot */}
         <div style={{ marginBottom:12 }}>
           <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:4 }}>Bien / Lot *</label>
-          <BienSelect value={form.target} onChange={v => set("target")(v)} bienOptions={bienOptions} immeubleGroups={immeubleGroups} allLabel="" />
+          <BienSelect value={form.target} onChange={handleTargetChange} bienOptions={bienOptions} immeubleGroups={immeubleGroups} allLabel="" />
         </div>
 
+        {/* Loyer HC + charges si type loyer ou charges */}
+        {isLoyerType && (
+          <div style={{ background:C.gp, borderRadius:10, padding:"12px 14px", marginBottom:12 }}>
+            <div style={{ fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", letterSpacing:".05em", marginBottom:10 }}>Détail loyer</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:8 }}>
+              <div>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", marginBottom:4 }}>Loyer HC (€)</label>
+                <input type="number" min="0" step="0.01" value={form.loyer_hc}
+                  onChange={e => setForm(f => ({ ...f, loyer_hc: e.target.value, montant: f.type === "loyer" ? e.target.value : f.montant }))}
+                  style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.wh, outline:"none", boxSizing:"border-box" }} />
+              </div>
+              <div>
+                <label style={{ display:"block", fontSize:11, fontWeight:700, color:C.gl, textTransform:"uppercase", marginBottom:4 }}>Charges récup. (€)</label>
+                <input type="number" min="0" step="0.01" value={form.charges_rec}
+                  onChange={e => setForm(f => ({ ...f, charges_rec: e.target.value, montant: f.type === "charges" ? e.target.value : f.montant }))}
+                  style={{ width:"100%", padding:"9px 11px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:14, fontFamily:"inherit", color:C.tx, background:C.wh, outline:"none", boxSizing:"border-box" }} />
+              </div>
+            </div>
+            {lhc > 0 && chrg > 0 && (
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"6px 10px", background:C.wh, borderRadius:8, fontSize:12, fontWeight:700, color:C.g }}>
+                <span style={{ color:C.tm }}>Total encaissable</span>
+                <span>{(lhc + chrg).toLocaleString("fr-FR", { style:"currency", currency:"EUR" })}</span>
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-          <FieldInput label="Montant (€) *" type="number" min="0" step="0.01" placeholder="0.00" value={form.montant} onChange={e => set("montant")(e.target.value)} />
+          <FieldInput label={isLoyerType ? "Montant encaissé (€) *" : "Montant (€) *"} type="number" min="0" step="0.01" placeholder="0.00" value={form.montant} onChange={e => set("montant")(e.target.value)} />
           <FieldInput label="Date *" type="date" value={form.date} onChange={e => set("date")(e.target.value)} />
         </div>
 
-        <FieldInput label="Locataire" placeholder="Nom du locataire (optionnel)" value={form.locataire_nom} onChange={e => set("locataire_nom")(e.target.value)} />
+        <FieldInput label="Locataire" placeholder="Nom du locataire" value={form.locataire_nom} onChange={e => set("locataire_nom")(e.target.value)} />
         <FieldInput label="Description" placeholder="Ex. Loyer mai 2026" value={form.description} onChange={e => set("description")(e.target.value)} />
 
         <button
@@ -203,6 +283,7 @@ export default function RecettesPage() {
   const [recettes,       setRecettes]       = useState<Recette[]>([])
   const [bienOptions,    setBienOptions]    = useState<BienOption[]>([])
   const [immeubleGroups, setImmeubleGroups] = useState<ImmeubleGroup[]>([])
+  const [activeLocs,     setActiveLocs]     = useState<ActiveLoc[]>([])
   const [loading,  setLoading]  = useState(true)
   const [dbError,  setDbError]  = useState("")
   const [userId,   setUserId]   = useState<string | null>(null)
@@ -211,6 +292,7 @@ export default function RecettesPage() {
   const [filterMois,   setFilterMois]   = useState(0)
   const [showAdd,  setShowAdd]  = useState(false)
   const [editItem, setEditItem] = useState<Recette | null>(null)
+  const [quickMois, setQuickMois] = useState(() => new Date().toISOString().slice(0, 7))
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserId(user?.id ?? null))
@@ -219,10 +301,11 @@ export default function RecettesPage() {
 
   async function load() {
     setLoading(true); setDbError("")
-    const [bienRes, lotRes, recRes] = await Promise.all([
+    const [bienRes, lotRes, recRes, locRes] = await Promise.all([
       supabase.from("biens").select("id, nom, notes").order("nom"),
       supabase.from("lots").select("id, bien_id, nom"),
       supabase.from("recettes").select("*").order("date_encaissement", { ascending: false }),
+      supabase.from("locataires").select("id, bien_id, lot_id, prenom, nom, loyer, charges, statut").neq("statut", "parti"),
     ])
     setLoading(false)
     if (bienRes.error) { setDbError(bienRes.error.message); return }
@@ -241,23 +324,48 @@ export default function RecettesPage() {
 
       if (meta.kind === "immeuble") {
         const bLots = lots.filter(l => l.bien_id === b.id)
-        const lotOpts: BienOption[] = bLots.map(l => ({
-          value: `${b.id}|${l.id}`,
-          label: `${l.nom} · ${b.nom}`,
-          bien_id: b.id,
-          lot_id: l.id,
-          display_nom: `${l.nom} (${b.nom})`,
-        }))
+        const lotOpts: BienOption[] = bLots.map(l => {
+          const loc = (locRes.data ?? []).find(lc => lc.lot_id === l.id)
+          return {
+            value: `${b.id}|${l.id}`,
+            label: `${l.nom} · ${b.nom}`,
+            bien_id: b.id,
+            lot_id: l.id,
+            display_nom: `${l.nom} (${b.nom})`,
+            loyer_hc: loc ? Number(loc.loyer ?? 0) : undefined,
+            charges: loc ? Number(loc.charges ?? 0) : undefined,
+            locataire_nom: loc ? `${loc.prenom ?? ""} ${loc.nom}`.trim() : undefined,
+          }
+        })
         groups.push({ id: b.id, nom: b.nom, lots: lotOpts })
         options.push({ value: b.id, label: b.nom, bien_id: b.id, lot_id: null, display_nom: b.nom })
         options.push(...lotOpts)
       } else {
-        options.push({ value: b.id, label: b.nom, bien_id: b.id, lot_id: null, display_nom: b.nom })
+        const loc = (locRes.data ?? []).find(lc => lc.bien_id === b.id && !lc.lot_id)
+        options.push({
+          value: b.id, label: b.nom, bien_id: b.id, lot_id: null, display_nom: b.nom,
+          loyer_hc: loc ? Number(loc.loyer ?? 0) : undefined,
+          charges: loc ? Number(loc.charges ?? 0) : undefined,
+          locataire_nom: loc ? `${loc.prenom ?? ""} ${loc.nom}`.trim() : undefined,
+        })
       }
     }
 
     setBienOptions(options)
     setImmeubleGroups(groups)
+
+    // Locataires actifs pour la saisie rapide
+    const locs: ActiveLoc[] = (locRes.data ?? []).map(lc => {
+      const opt = options.find(o => lc.lot_id ? o.lot_id === lc.lot_id : (o.bien_id === lc.bien_id && !o.lot_id))
+      return {
+        id: lc.id, bien_id: lc.bien_id, lot_id: lc.lot_id ?? null,
+        prenom: lc.prenom ?? "", nom: lc.nom,
+        loyer_hc: Number(lc.loyer ?? 0),
+        charges: Number(lc.charges ?? 0),
+        bien_nom: opt?.display_nom ?? "—",
+      }
+    })
+    setActiveLocs(locs)
 
     const recs: Recette[] = (recRes.data ?? []).map(r => {
       const opt = options.find(o =>
@@ -383,6 +491,54 @@ export default function RecettesPage() {
     setEditItem(null)
   }
 
+  // ── Saisie rapide ─────────────────────────────────────────
+
+  async function handleQuickPay(loc: ActiveLoc) {
+    if (!userId) return
+    const dateStr = `${quickMois}-01`
+    // Créer une recette loyer + une recette charges si > 0
+    const inserts = [
+      {
+        user_id: userId, bien_id: loc.bien_id, lot_id: loc.lot_id,
+        locataire_nom: `${loc.prenom} ${loc.nom}`.trim(),
+        type: "loyer", montant: loc.loyer_hc,
+        date_encaissement: dateStr,
+        description: `Loyer ${MOIS_FR[parseInt(quickMois.split("-")[1]) - 1]} ${quickMois.split("-")[0]}`,
+      },
+      ...(loc.charges > 0 ? [{
+        user_id: userId, bien_id: loc.bien_id, lot_id: loc.lot_id,
+        locataire_nom: `${loc.prenom} ${loc.nom}`.trim(),
+        type: "charges", montant: loc.charges,
+        date_encaissement: dateStr,
+        description: `Charges ${MOIS_FR[parseInt(quickMois.split("-")[1]) - 1]} ${quickMois.split("-")[0]}`,
+      }] : []),
+    ]
+    const { data, error } = await supabase.from("recettes").insert(inserts).select()
+    if (error) { setDbError(error.message); return }
+    const newRecs: Recette[] = (data ?? []).map(r => {
+      const opt = bienOptions.find(o => loc.lot_id ? o.lot_id === loc.lot_id : (o.bien_id === loc.bien_id && !o.lot_id))
+      return {
+        id: r.id, bien_id: r.bien_id, lot_id: r.lot_id ?? null,
+        bien_nom: opt?.display_nom ?? "—",
+        locataire_nom: r.locataire_nom ?? undefined,
+        type: r.type as TypeRecette, montant: Number(r.montant),
+        date: r.date_encaissement, description: r.description ?? undefined,
+      }
+    })
+    setRecettes(prev => [...newRecs, ...prev])
+    const annee = parseInt(quickMois.split("-")[0])
+    if (annee !== filterAnnee) setFilterAnnee(annee)
+  }
+
+  function isAlreadyPaid(loc: ActiveLoc): boolean {
+    return recettes.some(r =>
+      r.type === "loyer" &&
+      r.bien_id === loc.bien_id &&
+      r.lot_id === loc.lot_id &&
+      r.date.startsWith(quickMois)
+    )
+  }
+
   // ── Rendu ──────────────────────────────────────────────────
 
   return (
@@ -427,6 +583,55 @@ export default function RecettesPage() {
           </select>
         </div>
       </div>
+
+      {/* ── Saisie rapide loyers ─────────────────────────── */}
+      {!loading && activeLocs.length > 0 && (
+        <div style={{ background:C.wh, borderRadius:14, border:`1.5px solid ${C.g}`, padding:"16px 18px", marginBottom:18 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14, flexWrap:"wrap", gap:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+              <span style={{ fontWeight:800, fontSize:15, color:C.tx }}>⚡ Saisie rapide — loyers du mois</span>
+              <span style={{ fontSize:11, fontWeight:700, background:C.gp, color:C.g, padding:"2px 9px", borderRadius:10 }}>{activeLocs.length}</span>
+            </div>
+            <input
+              type="month" value={quickMois}
+              onChange={e => setQuickMois(e.target.value)}
+              style={{ padding:"6px 10px", border:`1.5px solid ${C.br}`, borderRadius:8, fontSize:13, fontFamily:"inherit", color:C.tx, background:C.cr, outline:"none" }}
+            />
+          </div>
+          <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+            {activeLocs.map(loc => {
+              const paid = isAlreadyPaid(loc)
+              const total = loc.loyer_hc + loc.charges
+              return (
+                <div key={loc.id} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"10px 14px", borderRadius:10, background:paid ? C.gp : C.cr, gap:12, flexWrap:"wrap" }}>
+                  <div style={{ flex:1, minWidth:0 }}>
+                    <div style={{ fontWeight:700, fontSize:13, color:C.tx }}>👤 {loc.prenom} {loc.nom}</div>
+                    <div style={{ fontSize:11, color:C.tm, marginTop:2 }}>{loc.bien_nom}</div>
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+                    <div style={{ fontSize:12, color:C.tm, textAlign:"right" }}>
+                      <span style={{ fontWeight:700, color:C.tx }}>{loc.loyer_hc.toLocaleString("fr-FR", { style:"currency", currency:"EUR" })} HC</span>
+                      {loc.charges > 0 && <span style={{ marginLeft:4 }}>+ {loc.charges.toLocaleString("fr-FR", { style:"currency", currency:"EUR" })} ch.</span>}
+                      <span style={{ marginLeft:4, fontWeight:800, color:C.g }}> = {total.toLocaleString("fr-FR", { style:"currency", currency:"EUR" })}</span>
+                    </div>
+                    {paid ? (
+                      <span style={{ padding:"6px 14px", borderRadius:8, background:C.g, color:"#fff", fontSize:11, fontWeight:800 }}>✓ Payé</span>
+                    ) : (
+                      <button
+                        onClick={() => handleQuickPay(loc)}
+                        disabled={loc.loyer_hc === 0}
+                        style={{ padding:"7px 14px", borderRadius:8, background:loc.loyer_hc > 0 ? C.g : C.cr2, color:loc.loyer_hc > 0 ? "#fff" : C.tm, border:"none", fontSize:12, fontWeight:700, cursor:loc.loyer_hc > 0 ? "pointer" : "not-allowed", fontFamily:"inherit" }}
+                      >
+                        ✓ Marquer payé
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Chargement */}
       {loading && (
