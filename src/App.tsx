@@ -8,6 +8,7 @@ import BilanPage from "./BilanPage"
 import DashboardPage from "./DashboardPage"
 import CreditsPage from "./CreditsPage"
 import AuthPage from "./AuthPage"
+import LandingPage from "./LandingPage"
 import { supabase } from "./supabase"
 
 const ANNEES = Array.from({ length: 6 }, (_, i) => new Date().getFullYear() - i)
@@ -99,6 +100,7 @@ export default function App() {
   const [user,         setUser]         = useState<object | null>(null)
   const [authChecking, setAuthChecking] = useState(true)
   const [showAddBien,  setShowAddBien]  = useState(false)
+  const [showAuth,     setShowAuth]     = useState(false)
 
   // ── Auth ─────────────────────────────────────────────────
   useEffect(() => {
@@ -151,7 +153,8 @@ export default function App() {
     </div>
   )
 
-  if (!user) return <AuthPage />
+  if (!user && showAuth) return <AuthPage onBack={() => setShowAuth(false)} />
+  if (!user) return <LandingPage onLogin={() => setShowAuth(true)} />
 
   return (
     <div style={{ fontFamily: "'Figtree',sans-serif", background: C.cr, minHeight: "100vh", color: C.tx }}>

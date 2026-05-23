@@ -14,7 +14,7 @@ const C = {
   wh: "#ffffff",
 }
 
-export default function AuthPage() {
+export default function AuthPage({ onBack }: { onBack?: () => void }) {
   const [mode, setMode]             = useState<"login" | "signup">("login")
   const [email, setEmail]           = useState("")
   const [password, setPassword]     = useState("")
@@ -85,10 +85,18 @@ export default function AuthPage() {
       <div style={{ background:C.wh, borderRadius:20, padding:"36px 28px", maxWidth:420, width:"100%", boxShadow:"0 4px 32px rgba(45,91,61,.12)" }}>
 
         <div style={{ textAlign:"center", marginBottom:28 }}>
+          {onBack && (
+            <button onClick={onBack} style={{
+              background:"none", border:"none", color:C.tm, fontSize:13, cursor:"pointer",
+              fontFamily:"inherit", marginBottom:16, display:"flex", alignItems:"center", gap:4,
+            }}>
+              ← Retour au site
+            </button>
+          )}
           <div style={{ fontSize:34, fontWeight:900, color:C.g, letterSpacing:"-0.5px" }}>
             <span style={{ fontWeight:300 }}>Co</span>renta
           </div>
-          <div style={{ fontSize:13, color:C.tm, marginTop:4 }}>Gestion immobilière personnelle</div>
+          <div style={{ fontSize:13, color:C.tm, marginTop:4 }}>Espace propriétaire</div>
         </div>
 
         <div style={{ display:"flex", background:C.cr, borderRadius:10, padding:4, marginBottom:24, gap:4 }}>
